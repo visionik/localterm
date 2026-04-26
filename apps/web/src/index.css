@@ -79,12 +79,12 @@
   --term-panel: #101010;
   --term-chrome: #1c1c1c;
   --term-rail: #161616;
-  --term-rail-foreground: rgba(255, 255, 255, 0.55);
-  --term-rail-foreground-strong: #ffffff;
-  --term-rail-muted: rgba(255, 255, 255, 0.35);
-  --term-rail-hover: rgba(255, 255, 255, 0.04);
-  --term-rail-active: rgba(255, 255, 255, 0.08);
-  --term-panel-border: rgba(255, 255, 255, 0.06);
+  --term-rail-foreground: oklch(1 0 0 / 0.55);
+  --term-rail-foreground-strong: oklch(1 0 0);
+  --term-rail-muted: oklch(1 0 0 / 0.35);
+  --term-rail-hover: oklch(1 0 0 / 0.04);
+  --term-rail-active: oklch(1 0 0 / 0.08);
+  --term-panel-border: oklch(1 0 0 / 0.06);
 }
 
 @theme inline {
@@ -129,6 +129,15 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --color-term-panel: var(--term-panel);
+  --color-term-chrome: var(--term-chrome);
+  --color-term-rail: var(--term-rail);
+  --color-term-rail-foreground: var(--term-rail-foreground);
+  --color-term-rail-foreground-strong: var(--term-rail-foreground-strong);
+  --color-term-rail-muted: var(--term-rail-muted);
+  --color-term-rail-hover: var(--term-rail-hover);
+  --color-term-rail-active: var(--term-rail-active);
+  --color-term-panel-border: var(--term-panel-border);
 }
 
 @layer base {
@@ -153,6 +162,19 @@
   html {
     @apply font-sans;
   }
+}
+
+.term-tab {
+  color: var(--term-rail-foreground);
+}
+.term-tab:hover {
+  background-color: var(--term-rail-hover);
+  color: var(--term-rail-foreground-strong);
+}
+.term-tab[data-state="active"] {
+  background-color: var(--term-rail-active);
+  color: var(--term-rail-foreground-strong);
+  font-weight: 500;
 }
 
 @media (prefers-reduced-motion: reduce) {

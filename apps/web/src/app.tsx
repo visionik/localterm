@@ -5,8 +5,11 @@ import { TerminalView } from "@/components/terminal-view";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { TOOLTIP_DELAY_MS } from "@/lib/constants";
 import { useTabKeybindings } from "@/lib/use-tab-keybindings";
 import { useSessions } from "@/lib/use-sessions";
+
+const NO_ACTIVE_TAB = "";
 
 const writeUrlTab = (id: string | null) => {
   if (typeof window === "undefined") return;
@@ -139,18 +142,18 @@ export const App = () => {
     );
   }
 
-  const activeTabValue = activeId ?? "";
+  const activeTabValue = activeId ?? NO_ACTIVE_TAB;
 
   return (
-    <TooltipProvider delayDuration={400}>
+    <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
       <Tabs
         value={activeTabValue}
         onValueChange={setActive}
         orientation="vertical"
-        className="flex h-dvh flex-row gap-0 bg-(--term-chrome) pt-1 pb-1 text-foreground"
+        className="flex h-dvh flex-row gap-0 bg-term-chrome pt-1 pb-1 text-foreground"
       >
         <TabSidebar onNew={() => void handleNewTab()} />
-        <div className="relative min-w-0 flex-1 overflow-hidden rounded-tl-lg border-t border-b-0 border-l border-(--term-panel-border) bg-(--term-panel)">
+        <div className="relative min-w-0 flex-1 overflow-hidden rounded-tl-lg border-t border-b-0 border-l border-term-panel-border bg-term-panel">
           {tabIds.map((tabId) => (
             <TabsContent
               key={tabId}
