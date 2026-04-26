@@ -20,6 +20,7 @@ interface TabBarProps {
 
 const TAB_TRIGGER_CLASSES = cn(
   "h-full min-w-0 flex-1 justify-start rounded-none border-0 bg-transparent px-3 text-xs font-normal whitespace-nowrap text-muted-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+  "hover:text-muted-foreground dark:hover:text-muted-foreground",
   "data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none",
 );
 
@@ -47,9 +48,7 @@ export const TabBar = ({ onNew }: TabBarProps) => {
                   <div
                     className={cn(
                       "group/tab relative flex min-w-0 flex-1 items-center transition-colors",
-                      isActive
-                        ? "bg-[#101010]"
-                        : "border-b border-white/[0.06] hover:bg-white/[0.02]",
+                      isActive ? "bg-[#101010]" : "border-b border-white/[0.06]",
                       session.exited && "italic opacity-60",
                     )}
                     style={{ minWidth: TAB_MIN_WIDTH_PX }}
@@ -60,6 +59,22 @@ export const TabBar = ({ onNew }: TabBarProps) => {
                       }
                     }}
                   >
+                    {isActive ? (
+                      <>
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/[0.08]"
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-y-0 left-0 w-px bg-white/[0.08]"
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-y-0 right-0 w-px bg-white/[0.08]"
+                        />
+                      </>
+                    ) : null}
                     {!isActive && index > 0 && !isPrevActive ? (
                       <span
                         aria-hidden="true"
