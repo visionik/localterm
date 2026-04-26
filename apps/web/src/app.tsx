@@ -1,5 +1,4 @@
-import { Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { TabBar } from "@/components/tab-bar";
 import { TerminalView } from "@/components/terminal-view";
@@ -53,6 +52,22 @@ export const App = () => {
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [setActive]);
+
+  const ensureCreatingRef = useRef(false);
+  useEffect(() => {
+    if (!hasLoaded) return;
+    if (error) return;
+    if (tabIds.length > 0) {
+      ensureCreatingRef.current = false;
+      return;
+    }
+    if (ensureCreatingRef.current) return;
+    ensureCreatingRef.current = true;
+    create({}).catch((creationError) => {
+      console.error(creationError);
+      ensureCreatingRef.current = false;
+    });
+  }, [hasLoaded, error, tabIds.length, create]);
 
   const handleNewTab = useCallback(async () => {
     try {
@@ -122,27 +137,18 @@ export const App = () => {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-background text-foreground">
+    <div className="flex h-dvh flex-col bg-[#101010] text-foreground">
       <TabBar onNew={() => void handleNewTab()} />
-      <div className="relative flex-1 overflow-hidden">
-        {tabIds.length === 0 ? (
-          <div className="grid h-full place-items-center">
-            <Button size="sm" onClick={() => void handleNewTab()}>
-              <Plus data-icon="inline-start" aria-hidden="true" />
-              new terminal
-            </Button>
+      <div className="relative flex-1 overflow-hidden bg-[#101010]">
+        {tabIds.map((tabId) => (
+          <div
+            key={tabId}
+            className="absolute inset-0"
+            style={{ display: tabId === activeId ? "block" : "none" }}
+          >
+            <TerminalView sessionId={tabId} isActive={tabId === activeId} />
           </div>
-        ) : (
-          tabIds.map((tabId) => (
-            <div
-              key={tabId}
-              className="absolute inset-0"
-              style={{ display: tabId === activeId ? "block" : "none" }}
-            >
-              <TerminalView sessionId={tabId} isActive={tabId === activeId} />
-            </div>
-          ))
-        )}
+        ))}
       </div>
     </div>
   );
