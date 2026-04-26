@@ -27,6 +27,7 @@ const TAB_TRIGGER_CLASSES = cn(
 export const TabBar = ({ onNew }: TabBarProps) => {
   const sessions = useSessions((state) => state.sessions);
   const activeId = useSessions((state) => state.activeId);
+  const setActive = useSessions((state) => state.setActive);
   const remove = useSessions((state) => state.remove);
 
   const canClose = sessions.length > 1;
@@ -47,11 +48,14 @@ export const TabBar = ({ onNew }: TabBarProps) => {
                 <TooltipTrigger asChild>
                   <div
                     className={cn(
-                      "group/tab relative flex min-w-0 flex-1 items-center transition-colors",
+                      "group/tab relative flex min-w-0 flex-1 cursor-pointer items-center transition-colors",
                       isActive ? "bg-[#101010]" : "border-b border-white/[0.06]",
                       session.exited && "italic opacity-60",
                     )}
                     style={{ minWidth: TAB_MIN_WIDTH_PX }}
+                    onPointerDown={(event) => {
+                      if (event.button === 0) setActive(session.id);
+                    }}
                     onAuxClick={(event) => {
                       if (event.button === 1 && canClose) {
                         event.preventDefault();
@@ -89,6 +93,7 @@ export const TabBar = ({ onNew }: TabBarProps) => {
                         size="icon-xs"
                         variant="ghost"
                         aria-label={`close ${label}`}
+                        onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                           event.stopPropagation();
                           void remove(session.id);
@@ -97,7 +102,7 @@ export const TabBar = ({ onNew }: TabBarProps) => {
                           "mr-1 size-5 rounded transition-opacity hover:bg-white/10",
                           isActive
                             ? "opacity-40 hover:opacity-100"
-                            : "opacity-0 group-hover/tab:opacity-100",
+                            : "pointer-events-none opacity-0 group-hover/tab:pointer-events-auto group-hover/tab:opacity-100",
                         )}
                       >
                         <X aria-hidden="true" />
