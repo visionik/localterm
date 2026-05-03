@@ -17,3 +17,6 @@ meta.json
 .agents/skills
 .claude.expect
 .mcp.json
+packages/cli/web
+packages/cli/README.md
+packages/cli/LICENSE

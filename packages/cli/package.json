@@ -1,25 +1,59 @@
 {
   "name": "localterm",
-  "version": "0.0.0",
+  "version": "0.0.1",
+  "description": "A browser-based terminal: one browser tab is one PTY session. Friendly URL, persistent xterm.js front-end, hono + node-pty back-end.",
+  "keywords": [
+    "browser-terminal",
+    "cli",
+    "node-pty",
+    "pty",
+    "shell",
+    "terminal",
+    "tty",
+    "xterm",
+    "xterm.js"
+  ],
+  "homepage": "https://github.com/aidenybai/localterm#readme",
+  "bugs": {
+    "url": "https://github.com/aidenybai/localterm/issues"
+  },
+  "license": "MIT",
+  "author": "Aiden Bai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aidenybai/localterm.git",
+    "directory": "packages/cli"
+  },
   "bin": {
     "localterm": "./bin/localterm.mjs"
   },
   "files": [
     "bin",
-    "dist"
+    "dist",
+    "web",
+    "README.md",
+    "LICENSE"
+  ],
+  "os": [
+    "darwin",
+    "linux"
   ],
   "type": "module",
   "main": "./dist/index.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
     "test": "vp test --run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "node ../../scripts/prepare-cli-publish.mjs"
   },
   "dependencies": {
-    "@localterm/server": "workspace:*",
     "commander": "^12.1.0",
     "kleur": "^4.1.5",
+    "localterm-server": "workspace:*",
     "open": "^10.1.0",
     "zod": "^4.3.6"
   },
@@ -27,5 +61,8 @@
     "@types/node": "^25.5.0",
     "typescript": "^5.9.3",
     "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.19"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

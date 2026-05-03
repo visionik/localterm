@@ -205,7 +205,7 @@ export const Terminal = ({ sessionId }: TerminalProps) => {
         rel="noopener noreferrer"
         aria-label="open new shell in a new browser tab"
         title="new shell — opens in a new browser tab"
-        className="absolute top-2 right-3 select-none rounded px-2 py-0.5 font-mono text-base leading-none text-white/40 transition-opacity hover:bg-white/10 hover:text-white/90"
+        className="absolute top-1 right-1 grid size-9 select-none place-items-center rounded-md font-mono text-xl leading-none text-white/40 transition-colors hover:bg-white/10 hover:text-white/90 focus-visible:bg-white/10 focus-visible:text-white/90 focus-visible:outline-none"
       >
         +
       </a>

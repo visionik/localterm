@@ -1,9 +1,33 @@
 {
-  "name": "@localterm/server",
-  "version": "0.0.0",
-  "private": true,
+  "name": "localterm-server",
+  "version": "0.0.1",
+  "description": "PTY-backed HTTP/WebSocket server that powers localterm — Hono + node-pty + headless xterm.",
+  "keywords": [
+    "hono",
+    "localterm",
+    "node-pty",
+    "pty",
+    "terminal",
+    "websocket",
+    "xterm"
+  ],
+  "homepage": "https://github.com/aidenybai/localterm#readme",
+  "bugs": {
+    "url": "https://github.com/aidenybai/localterm/issues"
+  },
+  "license": "MIT",
+  "author": "Aiden Bai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aidenybai/localterm.git",
+    "directory": "packages/server"
+  },
   "files": [
     "dist"
+  ],
+  "os": [
+    "darwin",
+    "linux"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -18,6 +42,9 @@
       "types": "./dist/protocol.d.ts",
       "import": "./dist/protocol.js"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -40,5 +67,8 @@
     "@vitest/coverage-v8": "^4.1.5",
     "typescript": "^5.9.3",
     "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.19"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

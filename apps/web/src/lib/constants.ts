@@ -1,4 +1,4 @@
-export { WS_CLOSE_SESSION_NOT_FOUND } from "@localterm/server/protocol";
+export { WS_CLOSE_SESSION_NOT_FOUND } from "localterm-server/protocol";
 
 export const RECONNECT_DELAY_MS = 1000;
 export const RESIZE_DEBOUNCE_MS = 80;

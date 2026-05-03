@@ -6,7 +6,7 @@
       "outputs": ["dist/**", ".next/**"]
     },
     "localterm#build": {
-      "dependsOn": ["@localterm/server#build", "@localterm/web#build"]
+      "dependsOn": ["localterm-server#build", "@localterm/web#build"]
     },
     "dev": {
       "cache": false,

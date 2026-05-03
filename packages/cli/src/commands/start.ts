@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createServer, DEFAULT_HOST, DEFAULT_PORT, isLoopbackHost } from "@localterm/server";
+import { createServer, DEFAULT_HOST, DEFAULT_PORT, isLoopbackHost } from "localterm-server";
 import kleur from "kleur";
 import open from "open";
 import { FORCE_EXIT_TIMEOUT_MS, getFriendlyUrl } from "../constants.js";

@@ -1,4 +1,4 @@
-import { DEFAULT_HOST, DEFAULT_PORT } from "@localterm/server";
+import { DEFAULT_HOST, DEFAULT_PORT } from "localterm-server";
 import { Command } from "commander";
 import { runKill } from "./commands/kill.js";
 import { runList } from "./commands/list.js";
@@ -7,9 +7,13 @@ import { runRestart } from "./commands/restart.js";
 import { runStart } from "./commands/start.js";
 import { runStatus } from "./commands/status.js";
 import { runStop } from "./commands/stop.js";
+import { readPackageVersion } from "./utils/read-package-version.js";
 
 const program = new Command();
-program.name("localterm").description("local browser-based terminal hub").version("0.0.0");
+program
+  .name("localterm")
+  .description("local browser-based terminal hub")
+  .version(readPackageVersion());
 
 program
   .command("start")

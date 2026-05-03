@@ -4,7 +4,7 @@ import {
   sessionsListSchema,
   type CreateSessionInput,
   type SessionMetadata,
-} from "@localterm/server";
+} from "localterm-server";
 import type { z } from "zod";
 
 export interface ApiClient {

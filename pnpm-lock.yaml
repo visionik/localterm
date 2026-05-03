@@ -36,9 +36,6 @@ importers:
       '@fontsource/geist-mono':
         specifier: ^5.2.7
         version: 5.2.7
-      '@localterm/server':
-        specifier: workspace:*
-        version: link:../../packages/server
       '@xterm/addon-clipboard':
         specifier: ^0.1.0
         version: 0.1.0(@xterm/xterm@5.5.0)
@@ -57,6 +54,9 @@ importers:
       '@xterm/xterm':
         specifier: ^5.5.0
         version: 5.5.0
+      localterm-server:
+        specifier: workspace:*
+        version: link:../../packages/server
       react:
         specifier: ^19.2.1
         version: 19.2.5
@@ -103,15 +103,15 @@ importers:
 
   packages/cli:
     dependencies:
-      '@localterm/server':
-        specifier: workspace:*
-        version: link:../server
       commander:
         specifier: ^12.1.0
         version: 12.1.0
       kleur:
         specifier: ^4.1.5
         version: 4.1.5
+      localterm-server:
+        specifier: workspace:*
+        version: link:../server
       open:
         specifier: ^10.1.0
         version: 10.2.0
