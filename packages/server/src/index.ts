@@ -247,7 +247,6 @@ export type * from "./types.js";
 export {
   DEFAULT_HOST,
   DEFAULT_PORT,
-  UNPRIVILEGED_FALLBACK_PORT,
   WS_CLOSE_BACKPRESSURE,
   WS_CLOSE_SESSION_NOT_FOUND,
 } from "./constants.js";

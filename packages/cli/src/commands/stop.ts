@@ -1,6 +1,7 @@
 import kleur from "kleur";
 import { STOP_MAX_WAIT_MS, STOP_POLL_INTERVAL_MS } from "../constants.js";
 import { clearPid, isAlive, readPid } from "../state.js";
+import { sleep } from "../utils/sleep.js";
 
 export const runStop = async (): Promise<void> => {
   const pid = readPid();
@@ -24,7 +25,7 @@ export const runStop = async (): Promise<void> => {
 
   let waited = 0;
   while (isAlive(pid) && waited < STOP_MAX_WAIT_MS) {
-    await new Promise((resolve) => setTimeout(resolve, STOP_POLL_INTERVAL_MS));
+    await sleep(STOP_POLL_INTERVAL_MS);
     waited += STOP_POLL_INTERVAL_MS;
   }
 

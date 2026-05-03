@@ -7,9 +7,6 @@ import { runRestart } from "./commands/restart.js";
 import { runStart } from "./commands/start.js";
 import { runStatus } from "./commands/status.js";
 import { runStop } from "./commands/stop.js";
-import { detectPrivilegeContext, rebaseEnvToInvoker } from "./privilege.js";
-
-rebaseEnvToInvoker(detectPrivilegeContext());
 
 const program = new Command();
 program.name("localterm").description("local browser-based terminal hub").version("0.0.0");
