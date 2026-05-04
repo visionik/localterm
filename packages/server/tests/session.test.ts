@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { serverToClientMessageSchema } from "../src/schemas.js";
 import { Session } from "../src/session.js";
 
 const waitFor = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> =>
@@ -36,6 +37,39 @@ describe("Session", () => {
       session.write("echo SESSION_TEST_TOKEN\n");
       const output = await collectOutput(session);
       expect(output).toContain("SESSION_TEST_TOKEN");
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it("exposes shell metadata used by the settings panel (path, basename, pid, cwd)", () => {
+    const session = new Session({ shell: "/bin/sh", cwd: "/" });
+    try {
+      expect(session.shell).toBe("/bin/sh");
+      expect(session.shellBaseName).toBe("sh");
+      expect(session.cwd).toBe("/");
+      expect(Number.isInteger(session.pid)).toBe(true);
+      expect(session.pid).toBeGreaterThan(0);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it("Session metadata produces a 'session' WS frame accepted by the public schema", () => {
+    // Locks in the contract that index.ts emits on WS open. If anyone changes the
+    // Session getters or the schema in a way that breaks this round-trip, this test
+    // catches it before the client silently loses the Settings → Shell section.
+    const session = new Session({ shell: "/bin/sh", cwd: "/" });
+    try {
+      const frame = {
+        type: "session" as const,
+        shell: session.shell,
+        shellName: session.shellBaseName,
+        pid: session.pid,
+        cwd: session.cwd,
+      };
+      const parsed = serverToClientMessageSchema.safeParse(frame);
+      expect(parsed.success).toBe(true);
     } finally {
       session.dispose();
     }

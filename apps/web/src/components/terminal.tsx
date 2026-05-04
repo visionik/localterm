@@ -29,13 +29,12 @@ import {
 } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ThemePicker } from "@/components/theme-picker";
+import { SettingsMenu } from "@/components/settings-menu";
 import {
   COPY_FEEDBACK_MS,
   DEAD_SESSION_TITLE_PREFIX,
   DEFAULT_DOCUMENT_TITLE,
   DISCONNECT_MODAL_THRESHOLD_FAILURES,
-  FALLBACK_MONO_FONT_FAMILY,
   FALLBACK_TERMINAL_BACKGROUND_HEX,
   FAVICON_ACTIVE_DEBOUNCE_MS,
   FAVICON_IDLE_DEBOUNCE_MS,
@@ -46,18 +45,36 @@ import {
   SEARCH_ACTIVE_MATCH_BACKGROUND_HEX,
   SEARCH_ACTIVE_MATCH_BORDER_HEX,
   SEARCH_MATCH_BACKGROUND_HEX,
-  TERMINAL_FONT_SIZE_PX,
-  TERMINAL_LINE_HEIGHT,
-  TERMINAL_SCROLLBACK_LINES,
   TOOLTIP_SIDE_OFFSET_PX,
 } from "@/lib/constants";
 import { serverToClientMessageSchema } from "@/lib/schemas";
+import type { TerminalCursorStyle } from "@/lib/terminal-cursor";
+import { findTerminalFontById } from "@/lib/terminal-fonts";
+import type { TerminalSessionInfo } from "@/lib/terminal-session-info";
 import { findTerminalThemeById } from "@/lib/terminal-themes";
+import { awaitFontReady } from "@/utils/await-font-ready";
+import { fitTerminalPreservingScroll } from "@/utils/fit-terminal-preserving-scroll";
 import { chunkInputByCodeUnits } from "@/utils/chunk-input-by-code-units";
+import { clampTerminalFontSize } from "@/utils/clamp-terminal-font-size";
+import { clampTerminalLineHeight } from "@/utils/clamp-terminal-line-height";
 import { detectIsMacPlatform } from "@/utils/detect-is-mac-platform";
 import { isFindShortcut } from "@/utils/is-find-shortcut";
+import { loadStoredTerminalCursorBlink } from "@/utils/load-stored-terminal-cursor-blink";
+import { loadStoredTerminalCursorStyle } from "@/utils/load-stored-terminal-cursor-style";
+import { loadStoredTerminalFontId } from "@/utils/load-stored-terminal-font-id";
+import { loadStoredTerminalFontSize } from "@/utils/load-stored-terminal-font-size";
+import { loadStoredTerminalLineHeight } from "@/utils/load-stored-terminal-line-height";
+import { loadStoredTerminalScrollback } from "@/utils/load-stored-terminal-scrollback";
+import { loadStoredTerminalScrollOnUserInput } from "@/utils/load-stored-terminal-scroll-on-user-input";
 import { loadStoredTerminalThemeId } from "@/utils/load-stored-terminal-theme-id";
 import { setTabFaviconState } from "@/utils/set-tab-favicon-state";
+import { storeTerminalCursorBlink } from "@/utils/store-terminal-cursor-blink";
+import { storeTerminalCursorStyle } from "@/utils/store-terminal-cursor-style";
+import { storeTerminalFontId } from "@/utils/store-terminal-font-id";
+import { storeTerminalFontSize } from "@/utils/store-terminal-font-size";
+import { storeTerminalLineHeight } from "@/utils/store-terminal-line-height";
+import { storeTerminalScrollback } from "@/utils/store-terminal-scrollback";
+import { storeTerminalScrollOnUserInput } from "@/utils/store-terminal-scroll-on-user-input";
 import { storeTerminalThemeId } from "@/utils/store-terminal-theme-id";
 import { MAX_INPUT_BYTES, type ClientToServerMessage } from "localterm-server/protocol";
 import "@xterm/xterm/css/xterm.css";
@@ -77,15 +94,6 @@ const SEARCH_DECORATION_OPTIONS = {
   activeMatchBorder: SEARCH_ACTIVE_MATCH_BORDER_HEX,
   matchOverviewRuler: SEARCH_ACTIVE_MATCH_BACKGROUND_HEX,
   activeMatchColorOverviewRuler: SEARCH_ACTIVE_MATCH_BORDER_HEX,
-};
-
-const resolveMonoFontFamily = (): string => {
-  if (typeof window === "undefined") return FALLBACK_MONO_FONT_FAMILY;
-  const value = window
-    .getComputedStyle(document.documentElement)
-    .getPropertyValue("--font-mono")
-    .trim();
-  return value || FALLBACK_MONO_FONT_FAMILY;
 };
 
 const buildWebSocketUrl = (): string => {
@@ -121,6 +129,14 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
   const retryFeedbackTimerRef = useRef<number | null>(null);
   const copyFeedbackTimerRef = useRef<number | null>(null);
   const initialThemeIdRef = useRef<string>(loadStoredTerminalThemeId());
+  const initialFontIdRef = useRef<string>(loadStoredTerminalFontId());
+  const initialFontSizeRef = useRef<number>(loadStoredTerminalFontSize());
+  const initialLineHeightRef = useRef<number>(loadStoredTerminalLineHeight());
+  const initialCursorStyleRef = useRef<TerminalCursorStyle>(loadStoredTerminalCursorStyle());
+  const initialCursorBlinkRef = useRef<boolean>(loadStoredTerminalCursorBlink());
+  const initialScrollbackRef = useRef<number>(loadStoredTerminalScrollback());
+  const initialScrollOnUserInputRef = useRef<boolean>(loadStoredTerminalScrollOnUserInput());
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const openSearchOverlayRef = useRef<(() => void) | null>(null);
   const [exitInfo, setExitInfo] = useState<ExitInfo | null>(null);
   const [consecutiveFailures, setConsecutiveFailures] = useState(0);
@@ -134,7 +150,28 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
     resultCount: 0,
   });
   const [activeThemeId, setActiveThemeId] = useState<string>(initialThemeIdRef.current);
-  const activeTheme = useMemo(() => findTerminalThemeById(activeThemeId), [activeThemeId]);
+  const [previewThemeId, setPreviewThemeId] = useState<string | null>(null);
+  const effectiveThemeId = previewThemeId ?? activeThemeId;
+  const effectiveTheme = useMemo(() => findTerminalThemeById(effectiveThemeId), [effectiveThemeId]);
+  const [activeFontId, setActiveFontId] = useState<string>(initialFontIdRef.current);
+  const [previewFontId, setPreviewFontId] = useState<string | null>(null);
+  const effectiveFontId = previewFontId ?? activeFontId;
+  const effectiveFont = useMemo(() => findTerminalFontById(effectiveFontId), [effectiveFontId]);
+  const [activeFontSize, setActiveFontSize] = useState<number>(initialFontSizeRef.current);
+  const [activeLineHeight, setActiveLineHeight] = useState<number>(initialLineHeightRef.current);
+  const [activeCursorStyle, setActiveCursorStyle] = useState<TerminalCursorStyle>(
+    initialCursorStyleRef.current,
+  );
+  const [previewCursorStyle, setPreviewCursorStyle] = useState<TerminalCursorStyle | null>(null);
+  const effectiveCursorStyle = previewCursorStyle ?? activeCursorStyle;
+  const [activeCursorBlink, setActiveCursorBlink] = useState<boolean>(
+    initialCursorBlinkRef.current,
+  );
+  const [activeScrollback, setActiveScrollback] = useState<number>(initialScrollbackRef.current);
+  const [activeScrollOnUserInput, setActiveScrollOnUserInput] = useState<boolean>(
+    initialScrollOnUserInputRef.current,
+  );
+  const [sessionInfo, setSessionInfo] = useState<TerminalSessionInfo | null>(null);
   const isMac = useMemo(detectIsMacPlatform, []);
 
   useEffect(() => {
@@ -193,22 +230,24 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
       }
     };
 
-    document.fonts.load(`${TERMINAL_FONT_SIZE_PX}px "Geist Mono"`).catch(() => {});
+    const initialFont = findTerminalFontById(initialFontIdRef.current);
+    void awaitFontReady(initialFont);
 
     const terminal = new XtermTerminal({
       allowProposedApi: true,
-      cursorBlink: true,
-      cursorStyle: "block",
-      fontFamily: resolveMonoFontFamily(),
-      fontSize: TERMINAL_FONT_SIZE_PX,
-      lineHeight: TERMINAL_LINE_HEIGHT,
-      scrollback: TERMINAL_SCROLLBACK_LINES,
+      cursorBlink: initialCursorBlinkRef.current,
+      cursorStyle: initialCursorStyleRef.current,
+      fontFamily: initialFont.family,
+      fontSize: initialFontSizeRef.current,
+      lineHeight: initialLineHeightRef.current,
+      scrollback: initialScrollbackRef.current,
       theme: findTerminalThemeById(initialThemeIdRef.current).colors,
       macOptionIsMeta: true,
-      scrollOnUserInput: true,
+      scrollOnUserInput: initialScrollOnUserInputRef.current,
     });
     terminalRef.current = terminal;
     const fitAddon = new FitAddon();
+    fitAddonRef.current = fitAddon;
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(new WebLinksAddon());
     terminal.loadAddon(new ClipboardAddon());
@@ -262,12 +301,10 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
     const sendResize = (cols: number, rows: number) => send({ type: "resize", cols, rows });
 
     const fitToContainer = () => {
-      try {
-        fitAddon.fit();
-        sendResize(terminal.cols, terminal.rows);
-      } catch {
-        /* container not yet measured */
-      }
+      // Skip the resize ping when fit() bailed out (unmeasured container) — sending
+      // the previous cols/rows would briefly desync the PTY until the next observer tick.
+      if (!fitTerminalPreservingScroll(terminal, fitAddon)) return;
+      sendResize(terminal.cols, terminal.rows);
     };
 
     const scheduleFit = () => {
@@ -298,6 +335,8 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
       terminal.write(formatExitMarker(code));
       document.title = titleForDeadSession(lastTitle);
       setExitInfo({ code });
+      // Clear so the Settings → Shell section doesn't show a stale dead PID/cwd.
+      setSessionInfo(null);
     };
 
     const connect = () => {
@@ -328,6 +367,13 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
           noteOutputActivity();
         } else if (message.type === "title") {
           applyIncomingTitle(message.title);
+        } else if (message.type === "session") {
+          setSessionInfo({
+            shell: message.shell,
+            shellName: message.shellName,
+            pid: message.pid,
+            cwd: message.cwd,
+          });
         } else if (message.type === "exit") {
           resetFavicon();
           markShellDead(message.code);
@@ -379,6 +425,7 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
       refocusTerminalRef.current = null;
       searchAddonRef.current = null;
       terminalRef.current = null;
+      fitAddonRef.current = null;
       titleDisposable.dispose();
       searchResultsDisposable.dispose();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
@@ -399,12 +446,109 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
   useEffect(() => {
     const terminal = terminalRef.current;
     if (!terminal) return;
-    terminal.options.theme = activeTheme.colors;
-  }, [activeTheme]);
+    terminal.options.theme = effectiveTheme.colors;
+  }, [effectiveTheme]);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    let cancelled = false;
+    void awaitFontReady(effectiveFont).then(() => {
+      if (cancelled) return;
+      const liveTerminal = terminalRef.current;
+      if (!liveTerminal) return;
+      liveTerminal.options.fontFamily = effectiveFont.family;
+      const liveFitAddon = fitAddonRef.current;
+      if (liveFitAddon) fitTerminalPreservingScroll(liveTerminal, liveFitAddon);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveFont]);
 
   const handleThemeChange = useCallback((nextThemeId: string) => {
     setActiveThemeId(nextThemeId);
+    setPreviewThemeId(null);
     storeTerminalThemeId(nextThemeId);
+  }, []);
+
+  const handleFontChange = useCallback((nextFontId: string) => {
+    setActiveFontId(nextFontId);
+    setPreviewFontId(null);
+    storeTerminalFontId(nextFontId);
+  }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.fontSize = activeFontSize;
+    const fitAddon = fitAddonRef.current;
+    if (fitAddon) fitTerminalPreservingScroll(terminal, fitAddon);
+  }, [activeFontSize]);
+
+  const handleFontSizeChange = useCallback((nextFontSize: number) => {
+    const clamped = clampTerminalFontSize(nextFontSize);
+    setActiveFontSize(clamped);
+    storeTerminalFontSize(clamped);
+  }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.lineHeight = activeLineHeight;
+    const fitAddon = fitAddonRef.current;
+    if (fitAddon) fitTerminalPreservingScroll(terminal, fitAddon);
+  }, [activeLineHeight]);
+
+  const handleLineHeightChange = useCallback((nextLineHeight: number) => {
+    const clamped = clampTerminalLineHeight(nextLineHeight);
+    setActiveLineHeight(clamped);
+    storeTerminalLineHeight(clamped);
+  }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.cursorStyle = effectiveCursorStyle;
+  }, [effectiveCursorStyle]);
+
+  const handleCursorStyleChange = useCallback((nextCursorStyle: TerminalCursorStyle) => {
+    setActiveCursorStyle(nextCursorStyle);
+    setPreviewCursorStyle(null);
+    storeTerminalCursorStyle(nextCursorStyle);
+  }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.cursorBlink = activeCursorBlink;
+  }, [activeCursorBlink]);
+
+  const handleCursorBlinkChange = useCallback((nextCursorBlink: boolean) => {
+    setActiveCursorBlink(nextCursorBlink);
+    storeTerminalCursorBlink(nextCursorBlink);
+  }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.scrollback = activeScrollback;
+  }, [activeScrollback]);
+
+  const handleScrollbackChange = useCallback((nextScrollback: number) => {
+    setActiveScrollback(nextScrollback);
+    storeTerminalScrollback(nextScrollback);
+  }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.scrollOnUserInput = activeScrollOnUserInput;
+  }, [activeScrollOnUserInput]);
+
+  const handleScrollOnUserInputChange = useCallback((nextScrollOnUserInput: boolean) => {
+    setActiveScrollOnUserInput(nextScrollOnUserInput);
+    storeTerminalScrollOnUserInput(nextScrollOnUserInput);
   }, []);
 
   useEffect(() => {
@@ -531,7 +675,7 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
       ? "0/0"
       : `${searchResults.resultIndex + 1}/${searchResults.resultCount}`;
 
-  const pageBackground = activeTheme.colors.background ?? FALLBACK_TERMINAL_BACKGROUND_HEX;
+  const pageBackground = effectiveTheme.colors.background ?? FALLBACK_TERMINAL_BACKGROUND_HEX;
 
   return (
     <div className="h-dvh w-dvw" style={{ background: pageBackground }}>
@@ -553,7 +697,28 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
             aria-label="terminal actions"
             className="absolute top-2 right-3 z-10 flex items-center gap-0.5 rounded-md border border-border/60 bg-background/70 p-0.5 text-muted-foreground shadow-xs backdrop-blur-md"
           >
-            <ThemePicker value={activeThemeId} onValueChange={handleThemeChange} />
+            <SettingsMenu
+              themeId={activeThemeId}
+              onThemeChange={handleThemeChange}
+              onThemePreview={setPreviewThemeId}
+              fontId={activeFontId}
+              onFontChange={handleFontChange}
+              onFontPreview={setPreviewFontId}
+              fontSize={activeFontSize}
+              onFontSizeChange={handleFontSizeChange}
+              lineHeight={activeLineHeight}
+              onLineHeightChange={handleLineHeightChange}
+              cursorStyle={activeCursorStyle}
+              onCursorStyleChange={handleCursorStyleChange}
+              onCursorStylePreview={setPreviewCursorStyle}
+              cursorBlink={activeCursorBlink}
+              onCursorBlinkChange={handleCursorBlinkChange}
+              scrollback={activeScrollback}
+              onScrollbackChange={handleScrollbackChange}
+              scrollOnUserInput={activeScrollOnUserInput}
+              onScrollOnUserInputChange={handleScrollOnUserInputChange}
+              sessionInfo={sessionInfo}
+            />
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -578,6 +743,7 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
                   <Button
                     variant="ghost"
                     size="icon-sm"
+                    nativeButton={false}
                     aria-label="open a new shell in a new browser tab"
                     render={<a href="/" target="_blank" rel="noopener noreferrer" />}
                     className="hover:text-foreground"

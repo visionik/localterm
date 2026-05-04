@@ -90,4 +90,47 @@ describe("serverToClientMessageSchema", () => {
       false,
     );
   });
+
+  it("accepts a session info frame", () => {
+    const result = serverToClientMessageSchema.safeParse({
+      type: "session",
+      shell: "/bin/zsh",
+      shellName: "zsh",
+      pid: 12345,
+      cwd: "/Users/tester",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects session frames missing required fields", () => {
+    const result = serverToClientMessageSchema.safeParse({
+      type: "session",
+      shell: "/bin/zsh",
+      pid: 12345,
+      cwd: "/Users/tester",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects session frames with negative PID", () => {
+    const result = serverToClientMessageSchema.safeParse({
+      type: "session",
+      shell: "/bin/zsh",
+      shellName: "zsh",
+      pid: -1,
+      cwd: "/Users/tester",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects session frames with empty string fields", () => {
+    const result = serverToClientMessageSchema.safeParse({
+      type: "session",
+      shell: "",
+      shellName: "zsh",
+      pid: 1,
+      cwd: "/Users/tester",
+    });
+    expect(result.success).toBe(false);
+  });
 });

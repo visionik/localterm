@@ -91,6 +91,10 @@ export class Session extends EventEmitter<SessionEvents> {
     return this.pty.pid;
   }
 
+  get shellBaseName(): string {
+    return this.shellName;
+  }
+
   get cols(): number {
     return this.currentCols;
   }

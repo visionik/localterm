@@ -1,6 +1,20 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { Terminal } from "../../src/components/terminal";
+import {
+  DEFAULT_TERMINAL_FONT_SIZE_PX,
+  DEFAULT_TERMINAL_LINE_HEIGHT,
+  TERMINAL_CURSOR_BLINK_STORAGE_KEY,
+  TERMINAL_CURSOR_STYLE_STORAGE_KEY,
+  TERMINAL_FONT_SIZE_MIN_PX,
+  TERMINAL_FONT_SIZE_STORAGE_KEY,
+  TERMINAL_LINE_HEIGHT_MAX,
+  TERMINAL_LINE_HEIGHT_STORAGE_KEY,
+  TERMINAL_SCROLL_ON_USER_INPUT_STORAGE_KEY,
+  TERMINAL_SCROLLBACK_STORAGE_KEY,
+} from "../../src/lib/constants";
+import { DEFAULT_TERMINAL_CURSOR_STYLE } from "../../src/lib/terminal-cursor";
+import { DEFAULT_TERMINAL_SCROLLBACK_LINES } from "../../src/lib/terminal-scrollback";
 
 interface FakeWebSocketHandle {
   url: string;
@@ -16,6 +30,9 @@ interface FakeXtermHandle {
   customKeyEventHandler: ((event: KeyboardEvent) => boolean) | null;
   fireTitleChange: (title: string) => void;
   getOptions: () => Record<string, unknown>;
+  setBufferState: (state: { baseY: number; viewportY: number }) => void;
+  scrollLines: ReturnType<typeof vi.fn>;
+  scrollToBottom: ReturnType<typeof vi.fn>;
 }
 
 interface FakeSearchAddonHandle {
@@ -89,6 +106,9 @@ vi.mock("@xterm/xterm", () => {
     rows = 24;
     unicode = { activeVersion: "11" };
     options: Record<string, unknown> = {};
+    buffer = { active: { baseY: 0, viewportY: 0 } };
+    scrollLines = vi.fn();
+    scrollToBottom = vi.fn();
     private titleListeners = new Set<(title: string) => void>();
     private handle: FakeXtermHandle;
 
@@ -100,6 +120,11 @@ vi.mock("@xterm/xterm", () => {
           for (const listener of this.titleListeners) listener(title);
         },
         getOptions: () => this.options,
+        setBufferState: ({ baseY, viewportY }) => {
+          this.buffer = { active: { baseY, viewportY } };
+        },
+        scrollLines: this.scrollLines,
+        scrollToBottom: this.scrollToBottom,
       };
       fakeXterms.push(this.handle);
     }
@@ -508,9 +533,360 @@ describe("Terminal theme picker", () => {
     expect(seededTheme?.background).toBe("#101010");
   });
 
-  it("exposes a labelled theme picker trigger in the toolbar", () => {
+  it("exposes a single labelled settings trigger in the toolbar", () => {
     installFakeLocalStorage();
     render(<Terminal />);
-    expect(screen.getByLabelText("terminal theme")).not.toBeNull();
+    expect(screen.getByLabelText("terminal settings")).not.toBeNull();
+  });
+});
+
+describe("Terminal font picker", () => {
+  it("seeds xterm with Geist Mono when no preference is stored", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    const fontFamily = fakeXterms[0]?.getOptions().fontFamily;
+    expect(fontFamily).toContain("Geist Mono");
+  });
+
+  it("seeds xterm with the stored font on mount", () => {
+    installFakeLocalStorage({ "localterm:terminal-font-id": "jetbrains-mono" });
+    render(<Terminal />);
+    const fontFamily = fakeXterms[0]?.getOptions().fontFamily;
+    expect(fontFamily).toContain("JetBrains Mono");
+  });
+
+  it("falls back to the default font when the stored id is unknown", () => {
+    installFakeLocalStorage({ "localterm:terminal-font-id": "made-up-font" });
+    render(<Terminal />);
+    const fontFamily = fakeXterms[0]?.getOptions().fontFamily;
+    expect(fontFamily).toContain("Geist Mono");
+  });
+});
+
+describe("Terminal font size", () => {
+  it("seeds xterm with the default font size when no preference is stored", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().fontSize).toBe(DEFAULT_TERMINAL_FONT_SIZE_PX);
+  });
+
+  it("seeds xterm with the stored font size on mount", () => {
+    installFakeLocalStorage({ [TERMINAL_FONT_SIZE_STORAGE_KEY]: "16" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().fontSize).toBe(16);
+  });
+
+  it("clamps an out-of-range stored font size up to the minimum on mount", () => {
+    installFakeLocalStorage({ [TERMINAL_FONT_SIZE_STORAGE_KEY]: "2" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().fontSize).toBe(TERMINAL_FONT_SIZE_MIN_PX);
+  });
+
+  it("falls back to the default font size when the stored value is not a number", () => {
+    installFakeLocalStorage({ [TERMINAL_FONT_SIZE_STORAGE_KEY]: "huge" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().fontSize).toBe(DEFAULT_TERMINAL_FONT_SIZE_PX);
+  });
+});
+
+describe("Terminal line height", () => {
+  it("seeds xterm with the default line height when no preference is stored", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().lineHeight).toBe(DEFAULT_TERMINAL_LINE_HEIGHT);
+  });
+
+  it("seeds xterm with the stored line height on mount", () => {
+    installFakeLocalStorage({ [TERMINAL_LINE_HEIGHT_STORAGE_KEY]: "1.5" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().lineHeight).toBeCloseTo(1.5, 5);
+  });
+
+  it("clamps an out-of-range stored line height down to the maximum on mount", () => {
+    installFakeLocalStorage({ [TERMINAL_LINE_HEIGHT_STORAGE_KEY]: "9" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().lineHeight).toBe(TERMINAL_LINE_HEIGHT_MAX);
+  });
+});
+
+describe("Terminal cursor style", () => {
+  it("seeds xterm with the default cursor style when no preference is stored", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().cursorStyle).toBe(DEFAULT_TERMINAL_CURSOR_STYLE);
+  });
+
+  it("seeds xterm with the stored cursor style on mount", () => {
+    installFakeLocalStorage({ [TERMINAL_CURSOR_STYLE_STORAGE_KEY]: "bar" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().cursorStyle).toBe("bar");
+  });
+
+  it("falls back to the default cursor style when the stored value is unknown", () => {
+    installFakeLocalStorage({ [TERMINAL_CURSOR_STYLE_STORAGE_KEY]: "spinning-rainbow" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().cursorStyle).toBe(DEFAULT_TERMINAL_CURSOR_STYLE);
+  });
+});
+
+describe("Terminal cursor blink", () => {
+  it("seeds xterm with cursor blink enabled by default", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().cursorBlink).toBe(true);
+  });
+
+  it("seeds xterm with the stored cursor blink preference", () => {
+    installFakeLocalStorage({ [TERMINAL_CURSOR_BLINK_STORAGE_KEY]: "false" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().cursorBlink).toBe(false);
+  });
+
+  it("falls back to the default when the stored value is neither 'true' nor 'false'", () => {
+    installFakeLocalStorage({ [TERMINAL_CURSOR_BLINK_STORAGE_KEY]: "maybe" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().cursorBlink).toBe(true);
+  });
+});
+
+describe("Terminal scrollback", () => {
+  it("seeds xterm with the default scrollback when no preference is stored", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().scrollback).toBe(DEFAULT_TERMINAL_SCROLLBACK_LINES);
+  });
+
+  it("seeds xterm with the stored scrollback on mount", () => {
+    installFakeLocalStorage({ [TERMINAL_SCROLLBACK_STORAGE_KEY]: "50000" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().scrollback).toBe(50000);
+  });
+
+  it("falls back to the default when the stored value is not a known preset", () => {
+    installFakeLocalStorage({ [TERMINAL_SCROLLBACK_STORAGE_KEY]: "12345" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().scrollback).toBe(DEFAULT_TERMINAL_SCROLLBACK_LINES);
+  });
+});
+
+describe("Terminal scrollOnUserInput", () => {
+  it("seeds xterm with scrollOnUserInput=true by default", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().scrollOnUserInput).toBe(true);
+  });
+
+  it("seeds xterm with the stored scrollOnUserInput preference", () => {
+    installFakeLocalStorage({ [TERMINAL_SCROLL_ON_USER_INPUT_STORAGE_KEY]: "false" });
+    render(<Terminal />);
+    expect(fakeXterms[0]?.getOptions().scrollOnUserInput).toBe(false);
+  });
+
+  it("toggling the pin-to-bottom switch updates terminal.options.scrollOnUserInput", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    fireEvent.click(screen.getByLabelText("terminal settings"));
+
+    expect(fakeXterms[0]?.getOptions().scrollOnUserInput).toBe(true);
+    act(() => {
+      fireEvent.click(screen.getByLabelText("toggle pin to bottom on input"));
+    });
+    expect(fakeXterms[0]?.getOptions().scrollOnUserInput).toBe(false);
+  });
+});
+
+describe("Terminal scroll preservation through hot-swaps", () => {
+  it("does not snap to the bottom when font size changes while the user is scrolled up", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    const handle = fakeXterms[0];
+    if (!handle) throw new Error("xterm not constructed");
+    // Mount + initial fits already happened with default {baseY:0, viewportY:0} → those
+    // legitimately called scrollToBottom. Clear before the actionable change.
+    handle.scrollToBottom.mockClear();
+    handle.scrollLines.mockClear();
+    // Pretend the user scrolled up 30 lines.
+    handle.setBufferState({ baseY: 100, viewportY: 70 });
+
+    fireEvent.click(screen.getByLabelText("terminal settings"));
+    act(() => {
+      fireEvent.click(screen.getByLabelText("increase font size"));
+    });
+
+    // The bug we fixed: scrolled-up users used to be snapped to the bottom on every fit().
+    expect(handle.scrollToBottom).not.toHaveBeenCalled();
+  });
+
+  it("snaps to the bottom on font size change when the user is already at the bottom", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    const handle = fakeXterms[0];
+    if (!handle) throw new Error("xterm not constructed");
+    handle.setBufferState({ baseY: 0, viewportY: 0 });
+
+    fireEvent.click(screen.getByLabelText("terminal settings"));
+    handle.scrollToBottom.mockClear();
+    act(() => {
+      fireEvent.click(screen.getByLabelText("increase font size"));
+    });
+
+    expect(handle.scrollToBottom).toHaveBeenCalled();
+  });
+});
+
+describe("Terminal live preview", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  const openThemeSelect = () => {
+    fireEvent.click(screen.getByLabelText("terminal settings"));
+    fireEvent.click(screen.getByLabelText("select theme"));
+  };
+
+  const openFontSelect = () => {
+    fireEvent.click(screen.getByLabelText("terminal settings"));
+    fireEvent.click(screen.getByLabelText("select font"));
+  };
+
+  const openCursorStyleSelect = () => {
+    fireEvent.click(screen.getByLabelText("terminal settings"));
+    fireEvent.click(screen.getByLabelText("select cursor style"));
+  };
+
+  it("hovering a theme item swaps terminal.options.theme to that theme", async () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    openThemeSelect();
+
+    const draculaItem = await screen.findByText("Dracula");
+    act(() => {
+      fireEvent.pointerEnter(draculaItem);
+    });
+
+    const previewedTheme = fakeXterms[0]?.getOptions().theme as { background?: string } | undefined;
+    expect(previewedTheme?.background).toBe("#282a36");
+  });
+
+  it("closing the outer popover while hovering reverts terminal.options.theme to the committed value", async () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    openThemeSelect();
+
+    const draculaItem = await screen.findByText("Dracula");
+    act(() => {
+      fireEvent.pointerEnter(draculaItem);
+    });
+    act(() => {
+      fireEvent.click(screen.getByLabelText("terminal settings"));
+    });
+
+    const revertedTheme = fakeXterms[0]?.getOptions().theme as { background?: string } | undefined;
+    expect(revertedTheme?.background).toBe("#101010");
+  });
+
+  it("hovering a font item swaps terminal.options.fontFamily to that font", async () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    openFontSelect();
+
+    const jetbrainsItem = await screen.findByText("JetBrains Mono");
+    act(() => {
+      fireEvent.pointerEnter(jetbrainsItem);
+    });
+
+    await vi.waitFor(() => {
+      const previewedFontFamily = fakeXterms[0]?.getOptions().fontFamily;
+      expect(previewedFontFamily).toContain("JetBrains Mono");
+    });
+  });
+
+  it("hovering a cursor style item swaps terminal.options.cursorStyle to that style", async () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    openCursorStyleSelect();
+
+    const barItem = await screen.findByText("Bar");
+    act(() => {
+      fireEvent.pointerEnter(barItem);
+    });
+
+    expect(fakeXterms[0]?.getOptions().cursorStyle).toBe("bar");
+  });
+
+  it("closing the outer popover while hovering reverts terminal.options.cursorStyle to the committed value", async () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    openCursorStyleSelect();
+
+    const barItem = await screen.findByText("Bar");
+    act(() => {
+      fireEvent.pointerEnter(barItem);
+    });
+    act(() => {
+      fireEvent.click(screen.getByLabelText("terminal settings"));
+    });
+
+    expect(fakeXterms[0]?.getOptions().cursorStyle).toBe(DEFAULT_TERMINAL_CURSOR_STYLE);
+  });
+});
+
+describe("Terminal hot-swap", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  const openSettings = () => {
+    fireEvent.click(screen.getByLabelText("terminal settings"));
+  };
+
+  it("clicking the line height + button updates terminal.options.lineHeight", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    openSettings();
+
+    const seededLineHeight = fakeXterms[0]?.getOptions().lineHeight as number;
+    act(() => {
+      fireEvent.click(screen.getByLabelText("increase line height"));
+    });
+
+    const updatedLineHeight = fakeXterms[0]?.getOptions().lineHeight as number;
+    expect(updatedLineHeight).toBeGreaterThan(seededLineHeight);
+  });
+
+  it("toggling the cursor blink switch updates terminal.options.cursorBlink", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    openSettings();
+
+    expect(fakeXterms[0]?.getOptions().cursorBlink).toBe(true);
+    act(() => {
+      fireEvent.click(screen.getByLabelText("toggle cursor blink"));
+    });
+    expect(fakeXterms[0]?.getOptions().cursorBlink).toBe(false);
+  });
+});
+
+describe("Terminal shell info", () => {
+  it("renders the shell info from a 'session' WS frame in the settings menu", () => {
+    installFakeLocalStorage();
+    render(<Terminal />);
+    act(() => {
+      fakeWebSockets[0]?.fireOpen();
+      fakeWebSockets[0]?.fireMessage({
+        type: "session",
+        shell: "/opt/homebrew/bin/fish",
+        shellName: "fish",
+        pid: 54321,
+        cwd: "/Users/tester/Developer/localterm",
+      });
+    });
+
+    fireEvent.click(screen.getByLabelText("terminal settings"));
+    fireEvent.click(screen.getByRole("button", { name: /^shell$/i }));
+
+    expect(screen.getByText("fish")).toBeDefined();
+    expect(screen.getByText("/opt/homebrew/bin/fish")).toBeDefined();
+    expect(screen.getByText("54321")).toBeDefined();
   });
 });

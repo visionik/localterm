@@ -1,10 +1,17 @@
 export const RECONNECT_DELAY_MS = 1000;
 export const RESIZE_DEBOUNCE_MS = 80;
-export const TERMINAL_FONT_SIZE_PX = 13;
-export const TERMINAL_LINE_HEIGHT = 1.2;
-export const TERMINAL_SCROLLBACK_LINES = 10000;
+export const DEFAULT_TERMINAL_FONT_SIZE_PX = 13;
+export const TERMINAL_FONT_SIZE_MIN_PX = 9;
+export const TERMINAL_FONT_SIZE_MAX_PX = 24;
+export const TERMINAL_FONT_SIZE_STEP_PX = 1;
+export const DEFAULT_TERMINAL_LINE_HEIGHT = 1.2;
+// xterm.js refuses lineHeight < 1 (throws "lineHeight cannot be less than 1").
+export const TERMINAL_LINE_HEIGHT_MIN = 1.0;
+export const TERMINAL_LINE_HEIGHT_MAX = 2.0;
+export const TERMINAL_LINE_HEIGHT_STEP = 0.1;
+export const DEFAULT_TERMINAL_CURSOR_BLINK = true;
+export const DEFAULT_TERMINAL_SCROLL_ON_USER_INPUT = true;
 export const FALLBACK_TERMINAL_BACKGROUND_HEX = "#101010";
-export const FALLBACK_MONO_FONT_FAMILY = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 export const DEFAULT_DOCUMENT_TITLE = "localterm";
 export const DEAD_SESSION_TITLE_PREFIX = "† ";
 export const DISCONNECT_MODAL_THRESHOLD_FAILURES = 2;
@@ -22,10 +29,21 @@ export const FAVICON_HUE_WHEEL_DEG = 360;
 export const TOOLTIP_DELAY_MS = 300;
 export const TOOLTIP_SIDE_OFFSET_PX = 8;
 
+export const NUMBER_STEPPER_SCRUB_PIXELS_PER_STEP = 5;
+
 export const SEARCH_MATCH_BACKGROUND_HEX = "#ffc79944";
 export const SEARCH_ACTIVE_MATCH_BACKGROUND_HEX = "#ffc799";
 export const SEARCH_ACTIVE_MATCH_BORDER_HEX = "#ff8080";
 
 export const TERMINAL_THEME_STORAGE_KEY = "localterm:terminal-theme-id";
+export const TERMINAL_FONT_STORAGE_KEY = "localterm:terminal-font-id";
+export const TERMINAL_FONT_SIZE_STORAGE_KEY = "localterm:terminal-font-size";
+export const TERMINAL_LINE_HEIGHT_STORAGE_KEY = "localterm:terminal-line-height";
+export const TERMINAL_CURSOR_STYLE_STORAGE_KEY = "localterm:terminal-cursor-style";
+export const TERMINAL_CURSOR_BLINK_STORAGE_KEY = "localterm:terminal-cursor-blink";
+export const TERMINAL_SCROLLBACK_STORAGE_KEY = "localterm:terminal-scrollback";
+export const TERMINAL_SCROLL_ON_USER_INPUT_STORAGE_KEY = "localterm:terminal-scroll-on-user-input";
+export const GOOGLE_FONTS_STYLESHEET_ID = "localterm-google-fonts";
+export const FONT_LOAD_PROBE_PX = 16;
 export const FAVICON_SESSION_HUE_STORAGE_KEY = "localterm:favicon-hue";
 export const FAVICON_RECENT_HUES_STORAGE_KEY = "localterm:recent-favicon-hues";

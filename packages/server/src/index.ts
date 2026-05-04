@@ -103,6 +103,9 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
           session = new Session({});
           registry.register(session);
 
+          // Wire listeners BEFORE the first safeSend so any synchronous emit
+          // from Session (current or future) reaches the client. Today
+          // node-pty's data/exit are async, but this guards against drift.
           const onOutput = (data: string) => safeSend(ws, { type: "output", data });
           const onTitle = (title: string) => safeSend(ws, { type: "title", title });
           const onExit = (code: number | null) => {
@@ -112,6 +115,14 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
           session.on("output", onOutput);
           session.on("title", onTitle);
           session.on("exit", onExit);
+
+          safeSend(ws, {
+            type: "session",
+            shell: session.shell,
+            shellName: session.shellBaseName,
+            pid: session.pid,
+            cwd: session.cwd,
+          });
         },
         onMessage(event) {
           if (!session) return;

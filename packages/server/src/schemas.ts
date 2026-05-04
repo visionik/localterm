@@ -55,8 +55,19 @@ const titleMessageSchema = z
   })
   .strict();
 
+const sessionMessageSchema = z
+  .object({
+    type: z.literal("session"),
+    shell: z.string().min(1),
+    shellName: z.string().min(1),
+    pid: z.number().int().nonnegative(),
+    cwd: z.string().min(1),
+  })
+  .strict();
+
 export const serverToClientMessageSchema = z.discriminatedUnion("type", [
   outputMessageSchema,
   exitMessageSchema,
   titleMessageSchema,
+  sessionMessageSchema,
 ]);
