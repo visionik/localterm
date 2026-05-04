@@ -1,5 +1,4 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { serve, type ServerType } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
 import { Hono } from "hono";
@@ -42,9 +41,6 @@ interface BroadcastSocket {
   raw?: unknown;
 }
 
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-const defaultStaticRoot = path.resolve(moduleDir, "../../terminal/dist");
-
 const getRawBufferedAmount = (raw: unknown): number => {
   if (!raw || typeof raw !== "object") return 0;
   const candidate = Reflect.get(raw, "bufferedAmount");
@@ -72,7 +68,7 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
   }
 
   const staticRoot =
-    options.staticRoot === null ? null : path.resolve(options.staticRoot ?? defaultStaticRoot);
+    typeof options.staticRoot === "string" ? path.resolve(options.staticRoot) : null;
 
   const registry = new SessionRegistry();
   const app = new Hono();
