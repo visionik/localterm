@@ -1,5 +1,13 @@
 # localterm
 
+## 0.0.9
+
+### Patch Changes
+
+- fix
+- Updated dependencies
+  - localterm-server@0.0.9
+
 ## 0.0.8
 
 ### Patch Changes
