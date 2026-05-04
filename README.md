@@ -5,7 +5,7 @@
 
 Your terminal should just be a browser tab.
 
-Run `npx localterm start` and every browser tab is one shell. Open a new tab to spawn another. Close the tab to kill it. That's the whole product.
+Run `npx localterm@latest start` and every browser tab is one shell. Open a new tab to spawn another. Close the tab to kill it. That's the whole product.
 
 ![demo](https://www.localterm.dev/demo.png)
 
@@ -14,7 +14,7 @@ Run `npx localterm start` and every browser tab is one shell. Open a new tab to 
 Run this command anywhere:
 
 ```bash
-npx localterm start
+npx localterm@latest start
 ```
 
 This boots a local daemon and opens [`http://localterm.localhost:3417`](http://localterm.localhost:3417) in your browser. (`*.localhost` is reserved by [RFC 6761](https://datatracker.ietf.org/doc/html/rfc6761) and resolves to `127.0.0.1` in every modern browser, so no `/etc/hosts` edit needed.)
