@@ -167,7 +167,9 @@ vi.mock("@xterm/xterm", () => {
     loadAddon = () => {};
     open = () => {};
     onData = () => {};
-    onResize = () => {};
+    onResize = () => ({ dispose: () => {} });
+    onScroll = () => ({ dispose: () => {} });
+    onWriteParsed = () => ({ dispose: () => {} });
     onTitleChange = (handler: (title: string) => void) => {
       this.titleListeners.add(handler);
       return { dispose: () => this.titleListeners.delete(handler) };
