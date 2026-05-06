@@ -1,5 +1,29 @@
 # localterm-server
 
+## [Unreleased]
+
+### Features
+
+- Add xumux v0.2 binary transport (`/xumux` WebSocket endpoint)
+- Binary codec for terminal message types (input, output, resize, exit, title, session-info)
+- XumuxServer multiplexer with HELLO/WELCOME handshake and channel management
+- WebSocketAdapter for xumux transport over WebSocket
+- Per-connection local session map prevents channel-ID collisions across concurrent connections
+- Backpressure enforcement on xumux channels
+- Loopback security on `/xumux` endpoint
+
+### Bug Fixes
+
+- Exit-code null sentinel changed from -1 to INT32_MIN so real exit code -1 is preserved
+- `decodeResize` returns null on short payload instead of throwing
+- `session.dispose()` called in PTY exit handler to prevent resource leak
+
+## 0.0.11
+
+### Patch Changes
+
+- fix
+
 ## 0.0.10
 
 ### Patch Changes

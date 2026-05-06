@@ -42,6 +42,7 @@ import {
   FAVICON_IDLE_DEBOUNCE_MS,
   KEYBOARD_MODIFIER_SHIFT_BIT,
   KITTY_KEYBOARD_DISAMBIGUATE_FLAG,
+  LOCAL_FONT_ID,
   KITTY_KEYBOARD_SET_MODE_AND_NOT,
   KITTY_KEYBOARD_SET_MODE_OR,
   KITTY_KEYBOARD_SET_MODE_REPLACE,
@@ -68,6 +69,7 @@ import { clampTerminalFontSize } from "@/utils/clamp-terminal-font-size";
 import { clampTerminalLineHeight } from "@/utils/clamp-terminal-line-height";
 import { detectIsMacPlatform } from "@/utils/detect-is-mac-platform";
 import { isFindShortcut } from "@/utils/is-find-shortcut";
+import { loadStoredLocalFontFamily } from "@/utils/load-stored-local-font-family";
 import { loadStoredTerminalCursorBlink } from "@/utils/load-stored-terminal-cursor-blink";
 import { loadStoredTerminalCursorStyle } from "@/utils/load-stored-terminal-cursor-style";
 import { loadStoredTerminalFontId } from "@/utils/load-stored-terminal-font-id";
@@ -77,6 +79,8 @@ import { loadStoredTerminalScrollback } from "@/utils/load-stored-terminal-scrol
 import { loadStoredTerminalScrollOnUserInput } from "@/utils/load-stored-terminal-scroll-on-user-input";
 import { loadStoredTerminalThemeId } from "@/utils/load-stored-terminal-theme-id";
 import { setTabFaviconState } from "@/utils/set-tab-favicon-state";
+import { shouldSuppressAltBufferWheel } from "@/utils/should-suppress-alt-buffer-wheel";
+import { storeLocalFontFamily } from "@/utils/store-local-font-family";
 import { storeTerminalCursorBlink } from "@/utils/store-terminal-cursor-blink";
 import { storeTerminalCursorStyle } from "@/utils/store-terminal-cursor-style";
 import { storeTerminalFontId } from "@/utils/store-terminal-font-id";
@@ -140,6 +144,7 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
   const copyFeedbackTimerRef = useRef<number | null>(null);
   const initialThemeIdRef = useRef<string>(loadStoredTerminalThemeId());
   const initialFontIdRef = useRef<string>(loadStoredTerminalFontId());
+  const initialLocalFontFamilyRef = useRef<string | null>(loadStoredLocalFontFamily());
   const initialFontSizeRef = useRef<number>(loadStoredTerminalFontSize());
   const initialLineHeightRef = useRef<number>(loadStoredTerminalLineHeight());
   const initialCursorStyleRef = useRef<TerminalCursorStyle>(loadStoredTerminalCursorStyle());
@@ -164,9 +169,15 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
   const effectiveThemeId = previewThemeId ?? activeThemeId;
   const effectiveTheme = useMemo(() => findTerminalThemeById(effectiveThemeId), [effectiveThemeId]);
   const [activeFontId, setActiveFontId] = useState<string>(initialFontIdRef.current);
+  const [activeLocalFontFamily, setActiveLocalFontFamily] = useState<string | null>(
+    initialLocalFontFamilyRef.current,
+  );
   const [previewFontId, setPreviewFontId] = useState<string | null>(null);
   const effectiveFontId = previewFontId ?? activeFontId;
-  const effectiveFont = useMemo(() => findTerminalFontById(effectiveFontId), [effectiveFontId]);
+  const effectiveFont = useMemo(
+    () => findTerminalFontById(effectiveFontId, activeLocalFontFamily),
+    [effectiveFontId, activeLocalFontFamily],
+  );
   const [activeFontSize, setActiveFontSize] = useState<number>(initialFontSizeRef.current);
   const [activeLineHeight, setActiveLineHeight] = useState<number>(initialLineHeightRef.current);
   const [activeCursorStyle, setActiveCursorStyle] = useState<TerminalCursorStyle>(
@@ -248,7 +259,10 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
       }
     };
 
-    const initialFont = findTerminalFontById(initialFontIdRef.current);
+    const initialFont = findTerminalFontById(
+      initialFontIdRef.current,
+      initialLocalFontFamilyRef.current,
+    );
     void awaitFontReady(initialFont);
 
     const terminal = new XtermTerminal({
@@ -336,6 +350,14 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
     const send = (message: ClientToServerMessage) => {
       if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
     };
+
+    terminal.attachCustomWheelEventHandler((event) => {
+      if (shouldSuppressAltBufferWheel(event, terminal)) {
+        event.preventDefault();
+        return false;
+      }
+      return true;
+    });
 
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.key === "Tab" && (event.metaKey || event.ctrlKey)) return false;
@@ -573,6 +595,14 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
     storeTerminalFontId(nextFontId);
   }, []);
 
+  const handleLocalFontChange = useCallback((family: string) => {
+    setActiveLocalFontFamily(family);
+    setActiveFontId(LOCAL_FONT_ID);
+    setPreviewFontId(null);
+    storeLocalFontFamily(family);
+    storeTerminalFontId(LOCAL_FONT_ID);
+  }, []);
+
   useEffect(() => {
     const terminal = terminalRef.current;
     if (!terminal) return;
@@ -800,6 +830,8 @@ export const Terminal = ({ onModalOpenChange }: TerminalProps = {}) => {
               fontId={activeFontId}
               onFontChange={handleFontChange}
               onFontPreview={setPreviewFontId}
+              localFontFamily={activeLocalFontFamily}
+              onLocalFontChange={handleLocalFontChange}
               fontSize={activeFontSize}
               onFontSizeChange={handleFontSizeChange}
               lineHeight={activeLineHeight}

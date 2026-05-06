@@ -1,4 +1,7 @@
-type TerminalFontSource = "fontsource" | "google";
+import { LOCAL_FONT_ID } from "@/lib/constants";
+import { escapeCssFontFamily } from "@/utils/escape-css-font-family";
+
+type TerminalFontSource = "fontsource" | "google" | "local";
 
 export interface TerminalFont {
   id: string;
@@ -9,7 +12,15 @@ export interface TerminalFont {
 
 const MONO_FALLBACK = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
-const buildFamily = (primary: string): string => `"${primary}", ${MONO_FALLBACK}`;
+const buildFamily = (primary: string): string =>
+  `"${escapeCssFontFamily(primary)}", ${MONO_FALLBACK}`;
+
+export const buildLocalTerminalFont = (family: string): TerminalFont => ({
+  id: LOCAL_FONT_ID,
+  name: family,
+  family: buildFamily(family),
+  source: "local",
+});
 
 const GEIST_MONO: TerminalFont = {
   id: "geist-mono",
@@ -104,7 +115,11 @@ export const TERMINAL_FONTS: TerminalFont[] = [
 
 export const DEFAULT_TERMINAL_FONT_ID: string = GEIST_MONO.id;
 
-export const findTerminalFontById = (id: string | null | undefined): TerminalFont => {
+export const findTerminalFontById = (
+  id: string | null | undefined,
+  localFontFamily?: string | null,
+): TerminalFont => {
+  if (id === LOCAL_FONT_ID && localFontFamily) return buildLocalTerminalFont(localFontFamily);
   if (!id) return GEIST_MONO;
   return TERMINAL_FONTS.find((font) => font.id === id) ?? GEIST_MONO;
 };

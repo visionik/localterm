@@ -8,9 +8,10 @@ import {
 
 export const setTabFaviconState = (state: FaviconState): void => {
   if (typeof document === "undefined") return;
-  if (!shouldRepaintFavicon(state)) return;
-  markFaviconPainted(state);
-  const href = `data:image/svg+xml,${encodeURIComponent(buildFaviconSvg(getCachedHue(), state))}`;
+  const hue = getCachedHue();
+  if (!shouldRepaintFavicon(state, hue)) return;
+  markFaviconPainted(state, hue);
+  const href = `data:image/svg+xml,${encodeURIComponent(buildFaviconSvg(hue, state))}`;
 
   let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!link) {

@@ -25,6 +25,8 @@ export const FAVICON_RECENT_HUES_LIMIT = 16;
 export const FAVICON_HUE_GRID_STEP_DEG = 12;
 export const FAVICON_HUE_JITTER_RANGE_DEG = FAVICON_HUE_GRID_STEP_DEG;
 export const FAVICON_HUE_WHEEL_DEG = 360;
+export const FAVICON_BROADCAST_CHANNEL_NAME = "localterm:favicon";
+export const FAVICON_COLLISION_RESOLVE_TIMEOUT_MS = 250;
 
 export const TOOLTIP_DELAY_MS = 300;
 export const TOOLTIP_SIDE_OFFSET_PX = 8;
@@ -60,6 +62,9 @@ export const SEARCH_ACTIVE_MATCH_BORDER_HEX = "#ff8080";
 
 export const TERMINAL_THEME_STORAGE_KEY = "localterm:terminal-theme-id";
 export const TERMINAL_FONT_STORAGE_KEY = "localterm:terminal-font-id";
+export const LOCAL_FONT_FAMILY_STORAGE_KEY = "localterm:local-font-family";
+export const LOCAL_FONT_ID = "local";
+export const LOCAL_FONT_ROW_INTRINSIC_HEIGHT_PX = 28;
 export const TERMINAL_FONT_SIZE_STORAGE_KEY = "localterm:terminal-font-size";
 export const TERMINAL_LINE_HEIGHT_STORAGE_KEY = "localterm:terminal-line-height";
 export const TERMINAL_CURSOR_STYLE_STORAGE_KEY = "localterm:terminal-cursor-style";

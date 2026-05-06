@@ -21,10 +21,12 @@ interface SettingsSelectProps {
   ariaLabel: string;
   placeholder: string;
   onValueChange: (next: string | null) => void;
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onItemHover?: (id: string) => void;
   triggerClassName?: string;
   triggerStyle?: CSSProperties;
+  footerSlot?: ReactNode;
 }
 
 const TRIGGER_BASE_CLASSES =
@@ -42,10 +44,12 @@ export const SettingsSelect = ({
   ariaLabel,
   placeholder,
   onValueChange,
+  open,
   onOpenChange,
   onItemHover,
   triggerClassName,
   triggerStyle,
+  footerSlot,
 }: SettingsSelectProps) => {
   // Without our own label rendering, Base UI's <SelectValue> falls back to the raw
   // value (e.g. "vesper") instead of the human-readable label ("Vesper").
@@ -57,7 +61,7 @@ export const SettingsSelect = ({
     ? { ...activeItem.itemStyle, ...triggerStyle }
     : triggerStyle;
   return (
-    <Select value={value} onValueChange={onValueChange} onOpenChange={onOpenChange}>
+    <Select value={value} onValueChange={onValueChange} open={open} onOpenChange={onOpenChange}>
       <SelectTrigger
         size="sm"
         aria-label={ariaLabel}
@@ -74,6 +78,9 @@ export const SettingsSelect = ({
         alignItemWithTrigger={false}
         sideOffset={4}
         className={cn(CONTENT_CLASSES, TRANSLUCENT_PANEL_CLASSES, PANEL_ANIMATION_CLASSES)}
+        footer={
+          footerSlot ? <div className="border-t border-border/40 p-1">{footerSlot}</div> : undefined
+        }
       >
         {items.map((item) => (
           <SelectItem

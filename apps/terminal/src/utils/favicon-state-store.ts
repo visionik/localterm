@@ -102,7 +102,7 @@ const persistTabHue = (hue: number, recent: readonly number[]): void => {
 
 let cachedHue: number | null = null;
 let currentState: FaviconState = "idle";
-let hasPaintedFavicon = false;
+let lastPaintedHue: number | null = null;
 
 export const getCachedHue = (): number => {
   if (cachedHue !== null) return cachedHue;
@@ -118,16 +118,27 @@ export const getCachedHue = (): number => {
   return fresh;
 };
 
-export const shouldRepaintFavicon = (next: FaviconState): boolean =>
-  !hasPaintedFavicon || next !== currentState;
+export const pickFreshHueAvoiding = (extraAvoidedHues: readonly number[]): number => {
+  const recent = readRecentHues();
+  return pickDistantHue([...recent, ...extraAvoidedHues]);
+};
 
-export const markFaviconPainted = (next: FaviconState): void => {
-  currentState = next;
-  hasPaintedFavicon = true;
+export const replaceHue = (nextHue: number): void => {
+  cachedHue = nextHue;
+  const recent = readRecentHues();
+  persistTabHue(nextHue, recent);
+};
+
+export const shouldRepaintFavicon = (nextState: FaviconState, nextHue: number): boolean =>
+  lastPaintedHue === null || nextState !== currentState || nextHue !== lastPaintedHue;
+
+export const markFaviconPainted = (nextState: FaviconState, nextHue: number): void => {
+  currentState = nextState;
+  lastPaintedHue = nextHue;
 };
 
 export const resetFaviconStateStore = (): void => {
   cachedHue = null;
   currentState = "idle";
-  hasPaintedFavicon = false;
+  lastPaintedHue = null;
 };

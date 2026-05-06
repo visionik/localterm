@@ -14,12 +14,23 @@ import {
   WS_READY_STATE_OPEN,
 } from "./constants.js";
 import { ServerErrorException, serverError } from "./errors.js";
+import {
+  TERMINAL_MSG_TYPE,
+  decodeInput,
+  decodeResize,
+  encodeExit,
+  encodeOutput,
+  encodeSessionInfo,
+  encodeTitle,
+} from "./protocol.js";
 import { clientToServerMessageSchema } from "./schemas.js";
 import { enforceLoopback, isLoopbackHost, loopbackMiddleware } from "./security.js";
 import { Session } from "./session.js";
 import { SessionRegistry } from "./session-registry.js";
 import { resolveStaticAsset } from "./static-resolver.js";
 import type { ServerToClientMessage } from "./types.js";
+import { WebSocketAdapter } from "./xumux/websocket-adapter.js";
+import { XumuxServer } from "./xumux/xumux-server.js";
 
 export interface ServerOptions {
   port?: number;
@@ -89,6 +100,7 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
       }
 
       let session: Session | null = null;
+      let registryId: number | null = null;
 
       return {
         onOpen(_event, ws) {
@@ -97,11 +109,8 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
             return;
           }
           session = new Session({});
-          registry.register(session);
+          registryId = registry.registerAuto(session);
 
-          // Wire listeners BEFORE the first safeSend so any synchronous emit
-          // from Session (current or future) reaches the client. Today
-          // node-pty's data/exit are async, but this guards against drift.
           const onOutput = (data: string) => safeSend(ws, { type: "output", data });
           const onTitle = (title: string) => safeSend(ws, { type: "title", title });
           const onExit = (code: number | null) => {
@@ -138,16 +147,156 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
           }
         },
         onClose() {
-          if (!session) return;
-          registry.unregister(session);
+          if (!session || registryId === null) return;
+          registry.unregister(registryId);
           session.dispose();
           session = null;
+          registryId = null;
         },
         onError() {
-          if (!session) return;
-          registry.unregister(session);
+          if (!session || registryId === null) return;
+          registry.unregister(registryId);
           session.dispose();
           session = null;
+          registryId = null;
+        },
+      };
+    }),
+  );
+
+  app.get(
+    "/xumux",
+    upgradeWebSocket((context) => {
+      const blocked = enforceLoopback(context);
+      if (blocked) {
+        return { onOpen: (_event, ws) => ws.close(WS_CLOSE_POLICY_VIOLATION, "forbidden") };
+      }
+
+      let xumux: XumuxServer | null = null;
+      // Per-connection session map: channelId → session.
+      // Channel IDs are only unique within a single xumux connection, so using
+      // the global registry (keyed by channelId) would cause collisions when two
+      // concurrent connections both open channel 1. This local map is scoped to
+      // the current WebSocket connection closure.
+      const connectionSessions = new Map<number, Session>();
+      // Parallel map of channelId → global registry auto-ID for size tracking.
+      const connectionRegistryIds = new Map<number, number>();
+
+      return {
+        onOpen(_event, ws) {
+          const adapter = new WebSocketAdapter(ws);
+          xumux = new XumuxServer(adapter, {
+            onOpenChannel: (channelId) => {
+              if (registry.size() >= MAX_CONCURRENT_SESSIONS) {
+                xumux?.closeChannel(channelId);
+                return;
+              }
+              const session = new Session({});
+              const globalId = registry.registerAuto(session);
+              connectionSessions.set(channelId, session);
+              connectionRegistryIds.set(channelId, globalId);
+
+              const sessionInfoPayload = encodeSessionInfo({
+                shell: session.shell,
+                shellName: session.shellBaseName,
+                pid: session.pid,
+                cwd: session.cwd,
+              });
+              xumux?.sendToChannel(channelId, TERMINAL_MSG_TYPE.SESSION_INFO, sessionInfoPayload);
+
+              const cleanupChannel = (disposeSes: boolean) => {
+                connectionSessions.delete(channelId);
+                const gid = connectionRegistryIds.get(channelId);
+                if (gid !== undefined) {
+                  registry.unregister(gid);
+                  connectionRegistryIds.delete(channelId);
+                }
+                if (disposeSes) session.dispose();
+              };
+
+              session.on("output", (data) => {
+                if (adapter.bufferedAmount > WS_BACKPRESSURE_THRESHOLD_BYTES) {
+                  xumux?.closeChannel(channelId);
+                  cleanupChannel(true);
+                  return;
+                }
+                xumux?.sendToChannel(channelId, TERMINAL_MSG_TYPE.OUTPUT, encodeOutput(data));
+              });
+              session.on("title", (title) => {
+                xumux?.sendToChannel(channelId, TERMINAL_MSG_TYPE.TITLE, encodeTitle(title));
+              });
+              session.on("exit", (code) => {
+                xumux?.sendToChannel(channelId, TERMINAL_MSG_TYPE.EXIT, encodeExit(code));
+                xumux?.closeChannel(channelId);
+                // dispose() must be called here: onCloseChannel won't fire for
+                // server-initiated closes, so this is the only cleanup path.
+                cleanupChannel(true);
+              });
+            },
+            onCloseChannel: (channelId) => {
+              const session = connectionSessions.get(channelId);
+              if (!session) return;
+              connectionSessions.delete(channelId);
+              const gid = connectionRegistryIds.get(channelId);
+              if (gid !== undefined) {
+                registry.unregister(gid);
+                connectionRegistryIds.delete(channelId);
+              }
+              session.dispose();
+            },
+            onChannelMessage: (event) => {
+              const session = connectionSessions.get(event.channelId);
+              if (!session) return;
+              if (event.type === TERMINAL_MSG_TYPE.INPUT) {
+                session.write(decodeInput(event.payload));
+              } else if (event.type === TERMINAL_MSG_TYPE.RESIZE) {
+                const dims = decodeResize(event.payload);
+                if (dims) session.resize(dims.cols, dims.rows);
+              }
+            },
+          });
+        },
+        onMessage(event) {
+          if (!xumux) return;
+          const raw = event.data;
+          let bytes: Uint8Array;
+          if (raw instanceof Uint8Array) {
+            bytes = raw;
+          } else if (raw instanceof ArrayBuffer) {
+            bytes = new Uint8Array(raw);
+          } else if (typeof raw === "string") {
+            bytes = new TextEncoder().encode(raw);
+          } else if (ArrayBuffer.isView(raw)) {
+            bytes = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+          } else if (typeof Blob !== "undefined" && raw instanceof Blob) {
+            void raw.arrayBuffer().then((buffer) => {
+              xumux?.onMessage(new Uint8Array(buffer));
+            });
+            return;
+          } else {
+            return;
+          }
+          xumux.onMessage(bytes);
+        },
+        onClose() {
+          if (!xumux) return;
+          xumux.close();
+          xumux = null;
+          // Dispose any sessions that didn't get an explicit CLOSE_CHANNEL
+          // (e.g. client disconnected mid-session).
+          for (const [, session] of connectionSessions) session.dispose();
+          for (const [, gid] of connectionRegistryIds) registry.unregister(gid);
+          connectionSessions.clear();
+          connectionRegistryIds.clear();
+        },
+        onError() {
+          if (!xumux) return;
+          xumux.close();
+          xumux = null;
+          for (const [, session] of connectionSessions) session.dispose();
+          for (const [, gid] of connectionRegistryIds) registry.unregister(gid);
+          connectionSessions.clear();
+          connectionRegistryIds.clear();
         },
       };
     }),

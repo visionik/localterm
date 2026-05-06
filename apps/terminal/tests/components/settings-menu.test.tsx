@@ -72,6 +72,8 @@ const renderSettingsMenu = ({
         fontId={initialFontId}
         onFontChange={onFontChange}
         onFontPreview={onFontPreview}
+        localFontFamily={null}
+        onLocalFontChange={() => {}}
         fontSize={initialFontSize}
         onFontSizeChange={onFontSizeChange}
         lineHeight={initialLineHeight}

@@ -34,6 +34,7 @@ interface FakeCsiHandlerEntry {
 
 interface FakeXtermHandle {
   customKeyEventHandler: ((event: KeyboardEvent) => boolean) | null;
+  customWheelEventHandler: ((event: WheelEvent) => boolean) | null;
   fireTitleChange: (title: string) => void;
   getOptions: () => Record<string, unknown>;
   setBufferState: (state: { baseY: number; viewportY: number }) => void;
@@ -140,6 +141,7 @@ vi.mock("@xterm/xterm", () => {
       this.options = { ...options };
       this.handle = {
         customKeyEventHandler: null,
+        customWheelEventHandler: null,
         fireTitleChange: (title: string) => {
           for (const listener of this.titleListeners) listener(title);
         },
@@ -176,6 +178,9 @@ vi.mock("@xterm/xterm", () => {
     };
     attachCustomKeyEventHandler = (handler: (event: KeyboardEvent) => boolean) => {
       this.handle.customKeyEventHandler = handler;
+    };
+    attachCustomWheelEventHandler = (handler: (event: WheelEvent) => boolean) => {
+      this.handle.customWheelEventHandler = handler;
     };
     write = () => {};
     reset = () => {};
