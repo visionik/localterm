@@ -1,14 +1,26 @@
 import type { Session } from "./session.js";
 
 export class SessionRegistry {
-  private readonly sessions = new Set<Session>();
+  private readonly sessions = new Map<number, Session>();
+  private nextAutoId = -1;
 
-  register(session: Session): void {
-    this.sessions.add(session);
+  register(channelId: number, session: Session): void {
+    this.sessions.set(channelId, session);
   }
 
-  unregister(session: Session): void {
-    this.sessions.delete(session);
+  registerAuto(session: Session): number {
+    const autoId = this.nextAutoId;
+    this.nextAutoId -= 1;
+    this.sessions.set(autoId, session);
+    return autoId;
+  }
+
+  unregister(channelId: number): void {
+    this.sessions.delete(channelId);
+  }
+
+  getByChannelId(channelId: number): Session | undefined {
+    return this.sessions.get(channelId);
   }
 
   size(): number {
@@ -16,7 +28,7 @@ export class SessionRegistry {
   }
 
   disposeAll(): void {
-    for (const session of this.sessions) {
+    for (const session of this.sessions.values()) {
       session.dispose();
     }
     this.sessions.clear();

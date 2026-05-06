@@ -60,8 +60,10 @@
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.9.3",
-    "vite-plus": "^0.1.12"
+    "vite-plus": "^0.1.12",
+    "ws": "^8.20.0"
   },
   "engines": {
     "node": ">=22"
