@@ -74,8 +74,9 @@ describe("resize codec", () => {
     expect(encodeResize(80, 24).length).toBe(4);
   });
 
-  it("throws on payload shorter than 4 bytes", () => {
-    expect(() => decodeResize(new Uint8Array(3))).toThrow("resize payload must be 4 bytes");
+  it("returns null on payload shorter than 4 bytes", () => {
+    expect(decodeResize(new Uint8Array(3))).toBeNull();
+    expect(decodeResize(new Uint8Array(0))).toBeNull();
   });
 });
 
@@ -88,11 +89,15 @@ describe("exit codec", () => {
     expect(decodeExit(encodeExit(137))).toBe(137);
   });
 
-  it("round-trips null exit code as -1 sentinel", () => {
+  it("round-trips null exit code as INT32_MIN sentinel", () => {
     const encoded = encodeExit(null);
     const view = new DataView(encoded.buffer);
-    expect(view.getInt32(0, false)).toBe(-1);
+    expect(view.getInt32(0, false)).toBe(-2147483648);
     expect(decodeExit(encoded)).toBeNull();
+  });
+
+  it("does not treat -1 as null (real exit code preserved)", () => {
+    expect(decodeExit(encodeExit(-1))).toBe(-1);
   });
 
   it("encodes as exactly 4 bytes", () => {

@@ -33,7 +33,8 @@ export type TerminalMsgType = (typeof TERMINAL_MSG_TYPE)[keyof typeof TERMINAL_M
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
-const EXIT_CODE_NULL_SENTINEL = -1;
+// INT32_MIN (0x80000000) — impossible as a real exit code on POSIX (0-255) or Windows (0-4294967295).
+const EXIT_CODE_NULL_SENTINEL = -2147483648;
 
 export const encodeInput = (data: string): Uint8Array => textEncoder.encode(data);
 
@@ -51,8 +52,8 @@ export const encodeResize = (cols: number, rows: number): Uint8Array => {
   return buffer;
 };
 
-export const decodeResize = (payload: Uint8Array): { cols: number; rows: number } => {
-  if (payload.length < 4) throw new Error("resize payload must be 4 bytes");
+export const decodeResize = (payload: Uint8Array): { cols: number; rows: number } | null => {
+  if (payload.length < 4) return null;
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   return { cols: view.getUint16(0, false), rows: view.getUint16(2, false) };
 };

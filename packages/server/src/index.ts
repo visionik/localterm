@@ -173,6 +173,14 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
       }
 
       let xumux: XumuxServer | null = null;
+      // Per-connection session map: channelId → session.
+      // Channel IDs are only unique within a single xumux connection, so using
+      // the global registry (keyed by channelId) would cause collisions when two
+      // concurrent connections both open channel 1. This local map is scoped to
+      // the current WebSocket connection closure.
+      const connectionSessions = new Map<number, Session>();
+      // Parallel map of channelId → global registry auto-ID for size tracking.
+      const connectionRegistryIds = new Map<number, number>();
 
       return {
         onOpen(_event, ws) {
@@ -184,7 +192,9 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
                 return;
               }
               const session = new Session({});
-              registry.register(channelId, session);
+              const globalId = registry.registerAuto(session);
+              connectionSessions.set(channelId, session);
+              connectionRegistryIds.set(channelId, globalId);
 
               const sessionInfoPayload = encodeSessionInfo({
                 shell: session.shell,
@@ -194,11 +204,20 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
               });
               xumux?.sendToChannel(channelId, TERMINAL_MSG_TYPE.SESSION_INFO, sessionInfoPayload);
 
+              const cleanupChannel = (disposeSes: boolean) => {
+                connectionSessions.delete(channelId);
+                const gid = connectionRegistryIds.get(channelId);
+                if (gid !== undefined) {
+                  registry.unregister(gid);
+                  connectionRegistryIds.delete(channelId);
+                }
+                if (disposeSes) session.dispose();
+              };
+
               session.on("output", (data) => {
                 if (adapter.bufferedAmount > WS_BACKPRESSURE_THRESHOLD_BYTES) {
                   xumux?.closeChannel(channelId);
-                  registry.unregister(channelId);
-                  session.dispose();
+                  cleanupChannel(true);
                   return;
                 }
                 xumux?.sendToChannel(channelId, TERMINAL_MSG_TYPE.OUTPUT, encodeOutput(data));
@@ -209,23 +228,30 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
               session.on("exit", (code) => {
                 xumux?.sendToChannel(channelId, TERMINAL_MSG_TYPE.EXIT, encodeExit(code));
                 xumux?.closeChannel(channelId);
-                registry.unregister(channelId);
+                // dispose() must be called here: onCloseChannel won't fire for
+                // server-initiated closes, so this is the only cleanup path.
+                cleanupChannel(true);
               });
             },
             onCloseChannel: (channelId) => {
-              const session = registry.getByChannelId(channelId);
+              const session = connectionSessions.get(channelId);
               if (!session) return;
-              registry.unregister(channelId);
+              connectionSessions.delete(channelId);
+              const gid = connectionRegistryIds.get(channelId);
+              if (gid !== undefined) {
+                registry.unregister(gid);
+                connectionRegistryIds.delete(channelId);
+              }
               session.dispose();
             },
             onChannelMessage: (event) => {
-              const session = registry.getByChannelId(event.channelId);
+              const session = connectionSessions.get(event.channelId);
               if (!session) return;
               if (event.type === TERMINAL_MSG_TYPE.INPUT) {
                 session.write(decodeInput(event.payload));
               } else if (event.type === TERMINAL_MSG_TYPE.RESIZE) {
-                const { cols, rows } = decodeResize(event.payload);
-                session.resize(cols, rows);
+                const dims = decodeResize(event.payload);
+                if (dims) session.resize(dims.cols, dims.rows);
               }
             },
           });
@@ -256,11 +282,21 @@ export const createServer = async (options: ServerOptions = {}): Promise<Running
           if (!xumux) return;
           xumux.close();
           xumux = null;
+          // Dispose any sessions that didn't get an explicit CLOSE_CHANNEL
+          // (e.g. client disconnected mid-session).
+          for (const [, session] of connectionSessions) session.dispose();
+          for (const [, gid] of connectionRegistryIds) registry.unregister(gid);
+          connectionSessions.clear();
+          connectionRegistryIds.clear();
         },
         onError() {
           if (!xumux) return;
           xumux.close();
           xumux = null;
+          for (const [, session] of connectionSessions) session.dispose();
+          for (const [, gid] of connectionRegistryIds) registry.unregister(gid);
+          connectionSessions.clear();
+          connectionRegistryIds.clear();
         },
       };
     }),
