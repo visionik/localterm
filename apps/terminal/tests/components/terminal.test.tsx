@@ -2,6 +2,21 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { Terminal } from "../../src/components/terminal";
 import {
+  TERMINAL_MSG_TYPE,
+  decodeTerminalMessage,
+  decodeTextPayload,
+  encodeExitPayload,
+  encodeTextPayload,
+  encodeTerminalMessage,
+} from "../../src/lib/terminal-codec";
+import {
+  XUMUX_CONTROL_CHANNEL,
+  XUMUX_DEFAULT_SESSION_CHANNEL,
+  XUMUX_FRAME_TYPE,
+  decodeFrame,
+  encodeFrame,
+} from "../../src/lib/xumux";
+import {
   DEFAULT_TERMINAL_FONT_SIZE_PX,
   DEFAULT_TERMINAL_LINE_HEIGHT,
   TERMINAL_CURSOR_BLINK_STORAGE_KEY,
@@ -21,6 +36,7 @@ interface FakeWebSocketHandle {
   send: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
   fireOpen: () => void;
+  fireBinaryMessage: (data: Uint8Array) => void;
   fireMessage: (payload: unknown) => void;
   fireClose: (code?: number) => void;
   fireError: () => void;
@@ -63,6 +79,7 @@ const installFakeWebSocket = () => {
 
     readonly url: string;
     readyState: number = FakeWebSocket.CONNECTING;
+    binaryType = "blob";
     private listeners = new Map<string, Set<(event: unknown) => void>>();
 
     send = vi.fn();
@@ -79,6 +96,9 @@ const installFakeWebSocket = () => {
         fireOpen: () => {
           this.readyState = FakeWebSocket.OPEN;
           this.dispatch("open", {});
+        },
+        fireBinaryMessage: (data: Uint8Array) => {
+          this.dispatch("message", { data: data.buffer });
         },
         fireMessage: (payload) => {
           this.dispatch("message", { data: JSON.stringify(payload) });
@@ -290,8 +310,29 @@ beforeEach(() => {
   stubBrowserGlobals();
   installFakeWebSocket();
   Object.defineProperty(navigator, "platform", { configurable: true, value: "MacIntel" });
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
 });
+
+const makeWelcomeFrame = (): Uint8Array =>
+  encodeFrame({ channel: XUMUX_CONTROL_CHANNEL, type: XUMUX_FRAME_TYPE.WELCOME, flags: 0, payload: new Uint8Array(0) });
+
+const makeChannelAckFrame = (channelId: number): Uint8Array => {
+  const payload = new Uint8Array(2);
+  new DataView(payload.buffer).setUint16(0, channelId);
+  return encodeFrame({ channel: XUMUX_CONTROL_CHANNEL, type: XUMUX_FRAME_TYPE.CHANNEL_ACK, flags: 0, payload });
+};
+
+const makeTerminalDataFrame = (msgType: number, msgPayload: Uint8Array): Uint8Array => {
+  const terminalMsg = encodeTerminalMessage(msgType, msgPayload);
+  return encodeFrame({ channel: XUMUX_DEFAULT_SESSION_CHANNEL, type: XUMUX_FRAME_TYPE.DATA, flags: 0, payload: terminalMsg });
+};
+
+const performXumuxHandshake = (socketIndex: number) => {
+  const socket = fakeWebSockets[socketIndex]!;
+  socket.fireOpen();
+  socket.fireBinaryMessage(makeWelcomeFrame());
+  socket.fireBinaryMessage(makeChannelAckFrame(XUMUX_DEFAULT_SESSION_CHANNEL));
+};
 
 afterEach(() => {
   cleanup();
@@ -338,7 +379,7 @@ describe("Terminal modal", () => {
 
     act(() => {
       vi.advanceTimersByTime(1500);
-      fakeWebSockets[2]?.fireOpen();
+      performXumuxHandshake(2);
     });
     expect(screen.queryByText(/Lost connection/i)).toBeNull();
   });
@@ -346,17 +387,17 @@ describe("Terminal modal", () => {
   it("renders the dead-pill and 'Shell ended' modal when the server reports an exit", () => {
     render(<Terminal />);
     act(() => {
-      fakeWebSockets[0]?.fireOpen();
-      fakeWebSockets[0]?.fireMessage({ type: "exit", code: 137 });
+      performXumuxHandshake(0);
+      fakeWebSockets[0]?.fireBinaryMessage(makeTerminalDataFrame(TERMINAL_MSG_TYPE.EXIT, encodeExitPayload(137)));
     });
     expect(screen.queryByText(/Shell ended/i)).not.toBeNull();
     expect(screen.queryByText(/exited · code 137/i)).not.toBeNull();
   });
 
-  it("treats a WebSocket close after a successful open as the shell ending", () => {
+  it("treats a WebSocket close after a successful handshake as the shell ending", () => {
     render(<Terminal />);
     act(() => {
-      fakeWebSockets[0]?.fireOpen();
+      performXumuxHandshake(0);
       fakeWebSockets[0]?.fireClose();
     });
     expect(screen.queryByText(/Shell ended/i)).not.toBeNull();
@@ -365,8 +406,8 @@ describe("Terminal modal", () => {
   it("blocks the auto-reconnect loop after the shell exits", () => {
     render(<Terminal />);
     act(() => {
-      fakeWebSockets[0]?.fireOpen();
-      fakeWebSockets[0]?.fireMessage({ type: "exit", code: 0 });
+      performXumuxHandshake(0);
+      fakeWebSockets[0]?.fireBinaryMessage(makeTerminalDataFrame(TERMINAL_MSG_TYPE.EXIT, encodeExitPayload(0)));
       fakeWebSockets[0]?.fireClose();
       vi.advanceTimersByTime(5000);
     });
@@ -532,6 +573,16 @@ describe("Terminal Cmd+F search", () => {
   });
 });
 
+const decodeSentTerminalInput = (socket: FakeWebSocketHandle | undefined, callIndex: number): string | null => {
+  const sentData = socket?.send.mock.calls[callIndex]?.[0] as Uint8Array | undefined;
+  if (!sentData) return null;
+  const frame = decodeFrame(new Uint8Array(sentData));
+  if (!frame) return null;
+  const terminalMessage = decodeTerminalMessage(frame.payload);
+  if (!terminalMessage) return null;
+  return decodeTextPayload(terminalMessage.payload);
+};
+
 const dispatchEnterKey = (
   handle: FakeXtermHandle | undefined,
   modifiers: { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean } = {},
@@ -557,9 +608,7 @@ describe("Terminal kitty keyboard Shift+Enter", () => {
 
     expect(result?.handlerResult).toBe(false);
     expect(result?.preventDefaultCalls).toBe(1);
-    expect(fakeWebSockets[0]?.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: "input", data: "\x1b[13;2u" }),
-    );
+    expect(decodeSentTerminalInput(fakeWebSockets[0], 0)).toBe("\x1b[13;2u");
   });
 
   it("emits CSI u for Ctrl+Enter and Cmd+Enter when kitty mode is active", () => {
@@ -573,14 +622,8 @@ describe("Terminal kitty keyboard Shift+Enter", () => {
     dispatchEnterKey(fakeXterms[0], { ctrlKey: true });
     dispatchEnterKey(fakeXterms[0], { metaKey: true });
 
-    expect(fakeWebSockets[0]?.send).toHaveBeenNthCalledWith(
-      1,
-      JSON.stringify({ type: "input", data: "\x1b[13;5u" }),
-    );
-    expect(fakeWebSockets[0]?.send).toHaveBeenNthCalledWith(
-      2,
-      JSON.stringify({ type: "input", data: "\x1b[13;9u" }),
-    );
+    expect(decodeSentTerminalInput(fakeWebSockets[0], 0)).toBe("\x1b[13;5u");
+    expect(decodeSentTerminalInput(fakeWebSockets[0], 1)).toBe("\x1b[13;9u");
   });
 
   it("leaves plain Enter to the xterm.js default handler regardless of kitty mode", () => {
@@ -608,9 +651,7 @@ describe("Terminal kitty keyboard Shift+Enter", () => {
     const result = dispatchEnterKey(fakeXterms[0], { altKey: true });
 
     expect(result?.handlerResult).toBe(false);
-    expect(fakeWebSockets[0]?.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: "input", data: "\x1b[13;3u" }),
-    );
+    expect(decodeSentTerminalInput(fakeWebSockets[0], 0)).toBe("\x1b[13;3u");
   });
 
   it("falls through Alt-only Enter to xterm.js when kitty mode is off so legacy \\e\\r is preserved", () => {
@@ -637,9 +678,7 @@ describe("Terminal kitty keyboard Shift+Enter", () => {
 
     expect(result?.handlerResult).toBe(false);
     expect(result?.preventDefaultCalls).toBe(1);
-    expect(fakeWebSockets[0]?.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: "input", data: "\n" }),
-    );
+    expect(decodeSentTerminalInput(fakeWebSockets[0], 0)).toBe("\n");
   });
 
   it("does not fall back to LF for Ctrl+Shift+Enter so app-specific bindings stay intact", () => {
@@ -664,9 +703,7 @@ describe("Terminal kitty keyboard Shift+Enter", () => {
     fakeWebSockets[0]?.send.mockClear();
 
     dispatchEnterKey(fakeXterms[0], { shiftKey: true });
-    expect(fakeWebSockets[0]?.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: "input", data: "\x1b[13;2u" }),
-    );
+    expect(decodeSentTerminalInput(fakeWebSockets[0], 0)).toBe("\x1b[13;2u");
 
     act(() => {
       fakeXterms[0]?.invokeCsiHandler("<", "u", [1]);
@@ -674,9 +711,7 @@ describe("Terminal kitty keyboard Shift+Enter", () => {
     fakeWebSockets[0]?.send.mockClear();
 
     dispatchEnterKey(fakeXterms[0], { shiftKey: true });
-    expect(fakeWebSockets[0]?.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: "input", data: "\n" }),
-    );
+    expect(decodeSentTerminalInput(fakeWebSockets[0], 0)).toBe("\n");
   });
 });
 
@@ -1067,14 +1102,14 @@ describe("Terminal shell info", () => {
     installFakeLocalStorage();
     render(<Terminal />);
     act(() => {
-      fakeWebSockets[0]?.fireOpen();
-      fakeWebSockets[0]?.fireMessage({
-        type: "session",
+      performXumuxHandshake(0);
+      const sessionPayload = encodeTextPayload(JSON.stringify({
         shell: "/opt/homebrew/bin/fish",
         shellName: "fish",
         pid: 54321,
         cwd: "/Users/tester/Developer/localterm",
-      });
+      }));
+      fakeWebSockets[0]?.fireBinaryMessage(makeTerminalDataFrame(TERMINAL_MSG_TYPE.SESSION_INFO, sessionPayload));
     });
 
     fireEvent.click(screen.getByLabelText("terminal settings"));
