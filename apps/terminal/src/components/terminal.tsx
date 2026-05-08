@@ -80,7 +80,7 @@ const SEARCH_DECORATION_OPTIONS = {
 };
 
 const buildWebSocketUrl = (): string => {
-  const url = new URL("/ws", window.location.href);
+  const url = new URL("/xumux", window.location.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
 };
