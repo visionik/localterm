@@ -1,8 +1,7 @@
-import {
-  WS_CLOSE_BACKPRESSURE,
-  WS_CLOSE_CAPACITY_REACHED,
-  WS_CLOSE_POLICY_VIOLATION,
-} from "localterm-server/protocol";
+// Close codes used by the legacy /ws endpoint (kept for SocketRefusedByServerError classification).
+const WS_CLOSE_POLICY_VIOLATION = 1008;
+const WS_CLOSE_CAPACITY_REACHED = 4503;
+const WS_CLOSE_BACKPRESSURE = 4429;
 
 interface ConnectionLostError {
   kind: "connection-lost";

@@ -57,7 +57,4 @@ export const LOOPBACK_HOSTS = new Set([
 
 export const HTTP_STATUS_NOT_FOUND = 404;
 
-export const WS_READY_STATE_OPEN = 1;
 export const WS_CLOSE_POLICY_VIOLATION = 1008;
-export const WS_CLOSE_BACKPRESSURE = 4429;
-export const WS_CLOSE_CAPACITY_REACHED = 4503;

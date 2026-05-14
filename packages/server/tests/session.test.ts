@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { serverToClientMessageSchema } from "../src/schemas.js";
+import { decodeSessionInfo, encodeSessionInfo } from "../src/protocol.js";
 import { Session } from "../src/session.js";
 
 const waitFor = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> =>
@@ -55,21 +55,23 @@ describe("Session", () => {
     }
   });
 
-  it("Session metadata produces a 'session' WS frame accepted by the public schema", () => {
-    // Locks in the contract that index.ts emits on WS open. If anyone changes the
-    // Session getters or the schema in a way that breaks this round-trip, this test
-    // catches it before the client silently loses the Settings → Shell section.
+  it("Session metadata round-trips through the xumux binary SESSION_INFO codec", () => {
+    // Locks in the contract that index.ts encodes on channel open. If anyone
+    // changes the Session getters or the codec in a way that breaks this
+    // round-trip, this test catches it before the client loses the Settings → Shell section.
     const session = new Session({ shell: "/bin/sh", cwd: "/" });
     try {
-      const frame = {
-        type: "session" as const,
+      const info = {
         shell: session.shell,
         shellName: session.shellBaseName,
         pid: session.pid,
         cwd: session.cwd,
       };
-      const parsed = serverToClientMessageSchema.safeParse(frame);
-      expect(parsed.success).toBe(true);
+      const decoded = decodeSessionInfo(encodeSessionInfo(info));
+      expect(decoded.shell).toBe(info.shell);
+      expect(decoded.shellName).toBe(info.shellName);
+      expect(decoded.pid).toBe(info.pid);
+      expect(decoded.cwd).toBe(info.cwd);
     } finally {
       session.dispose();
     }

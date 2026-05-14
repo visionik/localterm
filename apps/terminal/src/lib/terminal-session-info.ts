@@ -1,15 +1,10 @@
-import type { z } from "zod";
-import type { serverToClientMessageSchema } from "localterm-server/protocol";
-
 /**
- * Shape of the live shell session metadata pushed by the server on WS connect.
- *
- * Derived from the server's `serverToClientMessageSchema` so the client never
- * drifts from the protocol — adding a field on the server adds it here for
- * free, and `Omit<..., "type">` drops the discriminator that callers don't
- * carry around in component state.
+ * Live shell session metadata sent by the server as a SESSION_INFO xumux frame
+ * on channel open. Fields match the JSON payload encoded by encodeSessionInfo.
  */
-export type TerminalSessionInfo = Omit<
-  Extract<z.infer<typeof serverToClientMessageSchema>, { type: "session" }>,
-  "type"
->;
+export interface TerminalSessionInfo {
+  shell: string;
+  shellName: string;
+  pid: number;
+  cwd: string;
+}
