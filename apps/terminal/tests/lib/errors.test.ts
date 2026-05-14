@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
-  WS_CLOSE_BACKPRESSURE,
-  WS_CLOSE_CAPACITY_REACHED,
-  WS_CLOSE_POLICY_VIOLATION,
-} from "localterm-server/protocol";
-import {
   WebErrorException,
   formatWebError,
   isWebErrorException,
   webError,
   type WebError,
 } from "../../src/lib/errors";
+
+// Close codes previously exported from localterm-server/protocol; now inlined
+// after the /ws endpoint was removed in the Phase 4 xumux cutover.
+const WS_CLOSE_POLICY_VIOLATION = 1008;
+const WS_CLOSE_CAPACITY_REACHED = 4503;
+const WS_CLOSE_BACKPRESSURE = 4429;
 
 const allVariants = (): WebError[] => [
   webError.connectionLost(3),

@@ -1,7 +1,5 @@
 import {
   WS_BACKPRESSURE_THRESHOLD_BYTES,
-  WS_CLOSE_BACKPRESSURE,
-  WS_CLOSE_CAPACITY_REACHED,
   WS_CLOSE_POLICY_VIOLATION,
 } from "./constants.js";
 
@@ -32,14 +30,12 @@ interface BackpressureError {
   code: "E_LT_SERVER_BACKPRESSURE";
   bufferedBytes: number;
   thresholdBytes: typeof WS_BACKPRESSURE_THRESHOLD_BYTES;
-  wsCloseCode: typeof WS_CLOSE_BACKPRESSURE;
 }
 
 interface SessionCapacityError {
   kind: "session-capacity";
   code: "E_LT_SERVER_SESSION_CAPACITY";
   limit: number;
-  wsCloseCode: typeof WS_CLOSE_CAPACITY_REACHED;
 }
 
 interface FrameRejectedError {
@@ -92,13 +88,11 @@ export const serverError = {
     code: "E_LT_SERVER_BACKPRESSURE",
     bufferedBytes,
     thresholdBytes: WS_BACKPRESSURE_THRESHOLD_BYTES,
-    wsCloseCode: WS_CLOSE_BACKPRESSURE,
   }),
   sessionCapacity: (limit: number): SessionCapacityError => ({
     kind: "session-capacity",
     code: "E_LT_SERVER_SESSION_CAPACITY",
     limit,
-    wsCloseCode: WS_CLOSE_CAPACITY_REACHED,
   }),
   frameRejected: (direction: "inbound" | "outbound", reason: string): FrameRejectedError => ({
     kind: "frame-rejected",
